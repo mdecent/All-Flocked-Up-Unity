@@ -1,12 +1,7 @@
-using NUnit.Framework;
 using UnityEngine;
 using System.Collections.Generic;
-using UnityEditor.Rendering;
-using System.Drawing;
 using System.Linq;
-using Unity.VisualScripting;
-using System.Diagnostics.CodeAnalysis;
-using System;
+
 
 public class RaceBase : MonoBehaviour
 {
@@ -28,7 +23,7 @@ public class RaceBase : MonoBehaviour
     [SerializeField] private float currentTime;
     [SerializeField] private bool timerStarted;
     [SerializeField] private bool countdownStarted;
-    [SerializeField] private bool countdownComplete;
+    public bool countdownComplete;
     [SerializeField] private StartingLine currentRaceStartingLine => raceData.GetStartLine();
     public StartingLine raceStartLine => currentRaceStartingLine;
     [SerializeField] private List<CPURacer> currentRacerList = new();
@@ -67,6 +62,8 @@ public class RaceBase : MonoBehaviour
 
     private void StartRaceCountdown()
     {
+        canvasController.OpenCountdownCanvas();
+        Debug.Log("call countdown");
         if (countdownStarted)
         {
             countdown -= Time.deltaTime;
@@ -113,7 +110,7 @@ public class RaceBase : MonoBehaviour
         //raceData.checkpointSpawns = activeCheckpoints;
         foreach (var checkpoint in raceData.checkpointSpawns)
         {
-            //checkpointTransforms.Add(checkpoint.transform);
+            checkpointTransforms.Add(checkpoint.transform);
             activeCheckpoints.Add(checkpoint);
         }
         activeCheckpoints = activeCheckpoints.OrderBy(cpoint => cpoint.checkpointNumber).ToList();
@@ -134,6 +131,7 @@ public class RaceBase : MonoBehaviour
         GetCheckpointLocationAndClear();
         Debug.Log("Race Started");
         canvasController.CloseRaceGiver();
+        raceStartLine.SetRotationToCheckpoint(activeCheckpoints[0]);
         Debug.Log("canvasClosed");
         checkpointIndex = 1;
         SetStartLine();
@@ -151,10 +149,9 @@ public class RaceBase : MonoBehaviour
 
     private void SpawnCheckpoints()
     {
-        foreach (var transform in checkpointTransforms)
+        foreach (var checkpoint in activeCheckpoints)
         {
-            var checkpoint = Instantiate(checkpointPrefab, transform.position, transform.rotation);
-            activeCheckpoints.Add(checkpoint);
+            checkpoint.ShowCheckpoint();
         }
         lastCheckpoint = activeCheckpoints[activeCheckpoints.Count - 1];
     }
@@ -215,6 +212,7 @@ public class RaceBase : MonoBehaviour
     private void SetStartLine()
     {
         Debug.Log(currentRaceStartingLine.name);
+        currentRaceStartingLine.GetComponentInChildren<MeshRenderer>().enabled = true;
     }
 
     private void MovePlayerToStartLine()
@@ -233,17 +231,19 @@ public class RaceBase : MonoBehaviour
         {
             if (i >= currentRacerList.Count / 2)
             {
-                currentRacerList[i].transform.position = raceStartLine.transform.position + row2offset;
+                currentRacerList[i].transform.position = raceStartLine.transform.position  + row2offset;
                 currentRacerList[i].transform.rotation = raceStartLine.transform.rotation;
                 row2offset += gap;
                 currentRacerList[i].SetMoveToLocation(1);
+                Debug.Log("SET RACER LOC1" + currentRacerList[i].transform.position);
             }
-            else
+            else if(i < currentRacerList.Count / 2)
             {
                 currentRacerList[i].transform.position = raceStartLine.transform.position + offset;
                 currentRacerList[i].transform.rotation = raceStartLine.transform.rotation;
                 offset += gap;
                 currentRacerList[i].SetMoveToLocation(1);
+                Debug.Log("SET RACER LOC2");
             }
         }
     }
@@ -253,10 +253,12 @@ public class RaceBase : MonoBehaviour
         var racers = raceData.numberOfCPURacers;
         for (int i = racers; i > 0; i--)
         {
-            CPURacer racer = Instantiate(racerPrefab);
+            CPURacer racer = Instantiate(racerPrefab,raceStartLine.transform.position,raceStartLine.transform.rotation);
             currentRacerList.Add(racer);
-            SetStartingRacerLocation();
+            Debug.Log(racer.transform.position);
+            
         }
+        SetStartingRacerLocation();
         MovePlayerToStartLine();
     }
 
@@ -285,7 +287,7 @@ public class RaceBase : MonoBehaviour
     {
         if (!completedRacer.Contains(racer))
         {
-            if (checkpoint == lastCheckpoint)
+            if (checkpoint == lastCheckpoint && checkpointIndex == activeCheckpoints.Count)
             {
                 completedRacer.Add(racer);
                 if (racer.CompareTag("Race"))

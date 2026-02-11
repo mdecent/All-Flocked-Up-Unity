@@ -1,5 +1,8 @@
 using System;
+using System.Runtime.CompilerServices;
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class Pooper : MonoBehaviour
 {
@@ -11,49 +14,140 @@ public class Pooper : MonoBehaviour
 
     //[SeralizeField] private PoopArcRenderer arcRenderer; option for visualizing the arc, not yet implemented
 
+    [SerializeField] private Rigidbody pigeon;
+    [SerializeField] private GameObject mesh;
+
     private bool isAiming = false; // Track if the player is currently aiming
+    private PlayerInput playerInput;
+    private InputAction aimAction;
+    private InputAction poopAction;
+    private GameObject player;
 
+    bool isTurning;
+    Quaternion startRot;
+    Quaternion endRot;
+    [SerializeField]float spinTime = 0f;
+    [SerializeField]float spinDuration = 1f;
+    PlayerGroundMovement groundComp;
+    [SerializeField]bool isFlying;
 
-    //We should probably use the new input system for better control, but for not using old input system
+    // #region Setup & Init
+
+    //Switching to new input system - JK Oct/23
+
+    public bool GetIsAiming()
+    {
+        return isAiming;
+    }
+
+    bool GetIsFlying()
+    {
+        isFlying = groundComp.GetIsFlying();
+        return isFlying;
+    }
+    private void Start()
+    {
+        groundComp = GetComponent<PlayerGroundMovement>();
+        playerInput = GetComponentInParent<PlayerInput>();
+        Debug.Log($"PlayerInput: {playerInput != null}");
+
+        //Set up input actions
+        aimAction = playerInput.actions.FindAction("Aim");
+        poopAction = playerInput.actions.FindAction("Fire");
+
+        if (aimAction == null) Debug.LogError("Could not find 'Aim' action!");
+        if (poopAction == null) Debug.LogError("Could not find 'Fire' action!");
+
+        //Subscribe to input action events only if actions were found
+        if (aimAction != null && poopAction != null)
+        { 
+            aimAction.started += OnAimStarted;
+            aimAction.canceled += OnAimCanceled;
+            poopAction.performed += OnPoopPerformed;
+        }
+    }
+
     private void Update()
     {
-        HandleAimInput();
+        if (!isTurning) return;
+        
+        spinTime += Time.deltaTime / spinDuration;
 
-        if (isAiming)
+        float easeTime = Mathf.SmoothStep(0f, 1f, spinTime);
+        mesh.transform.rotation = Quaternion.Slerp(startRot, endRot, easeTime);
+        if (spinTime >= 1f)
         {
-            //arcRenderer.ShowArc();
-
-            if(Input.GetMouseButtonDown(0)) //Left click to poop
-            {
-                TryPooping();
-            }
-            else
-            {
-                //arcRenderer.HideArc();
-            }
+            mesh.transform.localRotation = endRot;
+            isTurning = false;
         }
+
+    }
+    private void OnDestroy()
+    {
+        //Unsubscribe from input action events
+        aimAction.started -= OnAimStarted;
+        aimAction.canceled -= OnAimCanceled;
+        poopAction.performed -= OnPoopPerformed;
     }
 
-    private void HandleAimInput()
+    //#endregion
+    #region Input Callbacks
+    private void OnAimStarted(InputAction.CallbackContext ctx)
     {
-        if (Input.GetMouseButtonDown(1)) //Right click
-        {
-            isAiming = true;
-            //show UI reticle or similar aiming UI - temp code added for Arc Renderer above
-        }
+        isAiming = true;
+        Debug.Log("Aiming started");
+        startRot = mesh.transform.localRotation;
+        endRot = startRot * Quaternion.Euler(0f, 180f, 0f);
 
-        if (Input.GetMouseButtonUp(1))
-        {
-            isAiming = false;
-        }
+        spinTime = 0f;
+        isTurning = true;
+        //Show aiming UI here if needed
+
     }
 
-    private void TryPooping()
+    private void OnAimCanceled(InputAction.CallbackContext ctx)
     {
+        isAiming = false;
+        Debug.Log("Aiming canceled");
+        startRot = mesh.transform.localRotation;
+        endRot = startRot * Quaternion.Euler(0f, -180f, 0f);
+        spinTime = 0f;
+        isTurning = true;
+        //Hide aiming UI here if needed
+    }
+
+    private void OnPoopPerformed(InputAction.CallbackContext ctx)
+    {
+        Debug.Log("Poop action performed");
+
+                TryPooping(GetIsFlying());
+            
+        
+    }
+
+    #endregion
+
+
+    private void TryPooping(bool isFlying)
+    {
+        if (isFlying)
+        {
+            Debug.Log("FlyingPoopCalled");
+            if (poopSystem.TryPoop())
+            {
+                Vector3 target = GetTarget();
+
+                //Get player velocity from pigeon rigidbody
+                Vector3 playerVelocity = pigeon.linearVelocity;
+                poopFunction.FirePoop(target, playerVelocity);
+            }
+        }else
         if (poopSystem.TryPoop())
         {
-            Vector3 target = GetTarget();
-            poopFunction.FirePoop(target);
+            if (isAiming)
+            {
+                poopFunction.FireGroundPoop();
+            }
         }
     }
 
@@ -68,5 +162,6 @@ public class Pooper : MonoBehaviour
 
         return cam.transform.position + cam.transform.forward * maxRange;
     }
+
 
 }

@@ -1,74 +1,164 @@
+using NUnit.Framework;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections.Generic;
+using UnityEngine.Rendering.Universal;
 
 public class VehicleBase :MonoBehaviour
 {
-    [SerializeField]protected Transform currentLocation;
-    [SerializeField] private Transform nextLocation;
+    public Waypoint currentNode;
+    [SerializeField] private Waypoint previousNode;
     [SerializeField] protected NavMeshAgent navAgent;
-    [SerializeField] private float vehicleSpeed;
-    [SerializeField] protected float detectRadius;
+    [SerializeField] private float vehicleSpeed => navAgent.speed;
+    [SerializeField] protected float detectRadius=2f;
     [SerializeField] protected LayerMask playerLayer;
     [SerializeField] protected LayerMask enemyLayer;
     [SerializeField] protected LayerMask trafficLayer;
-    [SerializeField] private bool isStopped;
+    public bool isStopped;
     [SerializeField] private bool isMoving;
+    [SerializeField] private List<WaypointConnection> connections = new();
+    [SerializeField] protected float detectObjectRange=2f;
+    public TrafficManager manager;
 
-    [SerializeField] protected float detectObjectRange;
+    bool isLeftTurn;
+    bool isRightTurn;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     protected virtual void Start()
     {
         navAgent = GetComponent<NavMeshAgent>();
+        MoveVehicleToLocation();
     }
+
 
     // Update is called once per frame
     protected virtual void Update()
     {
-        CheckForCollisions();
-        if(currentLocation!= null)
+        if (isStopped)
+        {
+            StopVehicle();
+        }else if (!isStopped)
+        {
+            MoveVehicleToLocation();
+        }
+
+        if (currentNode == null)
+        {
+            StopVehicle();
+            return;
+        }
+
+        if (navAgent.remainingDistance < 5f)
+        {
+            ChooseNextDirection(currentNode);
+        }
+
+    }
+
+    public bool GetIsMoving()
+    {
+        return isMoving;
+    }
+
+    public bool GetIsLeftTurn()
+    {
+        return isLeftTurn;
+    }
+
+    public bool GetIsRightTurn()
+    {
+        return isRightTurn;
+    }
+
+    protected virtual void SetMoveToLocation(Waypoint location)
+    {
+        currentNode = location;
+        navAgent.speed = 3.5f;
+    }
+
+    //call this to run like wind
+    public virtual void MoveVehicleToLocation()
+    {
+        if (currentNode == null || navAgent == null)
+            return;
+
+        navAgent.isStopped = false;
+        navAgent.SetDestination(currentNode.transform.position);
+
+    }
+
+    public virtual void StopVehicle()
+    {
+        navAgent.isStopped = true;
+        //Debug.Log("Stopping");
+    }
+
+    public virtual void TriggerCollisions()
+    {
+        //StopVehicle();
+        HonkHorn();
+        navAgent.speed = 2;
+        if (!navAgent.isStopped)
         {
             MoveVehicleToLocation();
         }
     }
 
-    protected virtual void SetMoveToLocation(Transform location)
-    {
-        currentLocation = location;
-    }
 
-    //call this to run like wind
-    protected virtual void MoveVehicleToLocation()
-    {
-        navAgent.SetDestination(currentLocation.position);
-    }
 
-    protected virtual void StopVehicle()
+    protected void ChooseNextDirection(Waypoint node)
     {
-        navAgent.isStopped = true;
-    }
+        if (node == null)
+            return;
+        connections.Clear();
+        connections.AddRange(node.connections);
 
-    protected virtual void CheckForCollisions()
-    {
-        RaycastHit hit;
-        if (Physics.SphereCast(transform.position,5f, transform.forward * detectObjectRange, out hit, trafficLayer))
+        if (connections.Count == 0 && node.nextWaypoint != null)
         {
-            StopVehicle();
-            HonkHorn();
+            connections.Add(new WaypointConnection { node = node.nextWaypoint });
+
         }
-        if (Physics.SphereCast(transform.position, 5f, transform.forward * detectObjectRange, out hit, playerLayer))
+        if (connections.Count == 0 && node.nextWaypoint == null)
         {
-            StopVehicle();
-            HonkHorn();
+            if (node.branches.Count > 0)
+            {
+                node.nextWaypoint = node.branches[0];
+            }
+            
         }
-        if (Physics.SphereCast(transform.position, 5f, transform.forward * detectObjectRange, out hit, enemyLayer))
+        //if (node.branches.Count>0)
+        //{
+        //    var chance = Random.Range(0, 1);
+        //    if (chance != 0)
+        //    {
+        //        node.nextWaypoint = node.branches[Random.Range(0, node.branches.Count-1)];
+        //    }
+            
+        //}
+        if(connections.Count ==0 && node.branches.Count == 0 && node.nextWaypoint == null)
         {
-            StopVehicle();
-            HonkHorn();
+            Destroy(this.gameObject);
+            manager.RemoveVehicleFromList(this);
         }
+
+        if (connections.Count == 0)
+            return;
+
+        int randomIndex = Random.Range(0, connections.Count);
+        Waypoint nextNode = connections[randomIndex].node;
+        if (nextNode == null)
+            return;
+        previousNode = currentNode;
+        SetMoveToLocation(nextNode);
+        MoveVehicleToLocation();
+        
     }
 
     protected virtual void HonkHorn()
     {
         //add horn SFX/possible headlight VFX? 
+        Debug.Log("HONNKKKKKKKKKKKK");
     }
+
+
 }

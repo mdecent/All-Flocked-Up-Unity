@@ -11,6 +11,20 @@ TagManager:
   - QuestInteract
   - Consumable
   - Race
+  - Vehicle
+  - Traffic
+  - Human
+  - Cat
+  - Dog
+  - Hawk
+  - Poop
+  - Racoon
+  - BorderHawkZone
+  - HideSpot
+  - Enemy
+  - NPC
+  - Trash
+  - Ground
   layers:
   - Default
   - TransparentFX
@@ -29,18 +43,18 @@ TagManager:
   - Race
   - Prop&Building
   - Traffic
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
+  - Nest
+  - TrafficLight
+  - TrafficWaypoints
+  - Map
+  - Poopable
+  - Projectile
+  - Shop
+  - Climbable
+  - GrabLayer
+  - Wearable
+  - Perchable
+  - Interior
   - 
   - 
   - 

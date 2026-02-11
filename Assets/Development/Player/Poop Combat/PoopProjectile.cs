@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody))]
 public class PoopProjectile : MonoBehaviour
@@ -15,49 +16,94 @@ public class PoopProjectile : MonoBehaviour
     private PoopType poopType;
 
     [SerializeField] private float speed = 15f; //temporary, this should be half of the player speed
-    [SerializeField] private float maxLifetime = 5f; //also adjust with testing
 
     private float lifeTimer;
+
+    [SerializeField] private PoopSplatDecal decalPrefab;
+    [SerializeField] private ParticleSystem splashParticle;
+
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
     }
 
-    public void Launch(Vector3 target, PoopType type, PoopFunction functionSource)
+    public void Launch(Vector3 target, PoopType type, PoopFunction functionSource, Vector3 playerVelocity)
     {
         poopType = type;
         source = functionSource;
-        Vector3 direction = (target = transform.position).normalized; // Calculate direction to target
-        rb.linearVelocity = direction * speed; //remember to update logic to be half player speed
-        lifeTimer = maxLifetime; // Reset lifetime timer
+
+        Vector3 direction = (target - transform.position).normalized;
+
+        float launchSpeed = playerVelocity.magnitude * 0.5f; // Launch speed is half the player's speed
+
+        if (launchSpeed <= 0.1f)
+        {
+            launchSpeed = speed; // Fallback to default speed if player is stationary
+        }
+
+        rb.linearVelocity = direction * launchSpeed;
+
     }
+
+    private void SpawnPoopDecal(Vector3 position, Vector3 hit)
+    {
+        PoopSplatDecal spawned;
+        if (hit.y >= 1)
+        {
+
+            spawned = Instantiate(decalPrefab, position, Quaternion.Euler(90, 0, 0));
+        }
+        else if (hit.x >= 1)
+        {
+
+            spawned = Instantiate(decalPrefab, position, Quaternion.Euler(0, 90, 0));
+        }
+        else if (hit.z <= 0)
+        {
+            spawned = Instantiate(decalPrefab, position, Quaternion.Euler(0, 0, 0));
+        }
+        else return;
+    }
+
 
     private void Update()
     {
-        lifeTimer -= Time.deltaTime;
-        if (lifeTimer <= 0f)
-        {
-            ReturnToPool();
-        }
+
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        source?.HandleHitEffects(poopType, collision.contacts[0].point); // Trigger hit effects
+        var obj = collision.gameObject;
+        var hit = collision.GetContact(0).normal;
+        Debug.Log(hit);
+        SpawnPoopDecal(transform.position,hit);
+        Instantiate(splashParticle,transform.position,Quaternion.identity* Quaternion.Euler(-90,0,0));
+        //source?.HandleHitEffects(poopType, collision.contacts[0].point); // Trigger hit effects
 
-        if (collision.gameObject.TryGetComponent<IPoopable>(out var poopable))
+        if (collision.gameObject.CompareTag("Enemy"))
         {
-            poopable.OnPoopHit(poopType);
+            //poopable.OnPoopHit(poopType);
+            obj.GetComponent<EnemyBaseComponent>().TakeDamage(10);
+            Debug.Log("EnemyHit");
+        }
+        if (collision.gameObject.CompareTag("NPC"))
+        {
+            obj.GetComponent<NPCBase>().HitReact();
+            Debug.Log("NPCHit");
+        }
+        if (collision.gameObject.CompareTag("Vehicle"))
+        {
+            var vehicle = collision.gameObject.GetComponent<VehicleScript>();
+            vehicle.TriggerCollisions();
+            Debug.Log("CarHit");
+        }
+        if (!collision.gameObject.CompareTag("Player"))
+        {
+            Destroy(gameObject);
         }
 
-        ReturnToPool();
     }
 
-    private void ReturnToPool()
-    {
-        rb.linearVelocity = Vector3.zero; // Stop the projectile
-        gameObject.SetActive(false); // Deactivate the projectile
-        source?.ReturnProjectileToPool(this);
-    }
+
 }

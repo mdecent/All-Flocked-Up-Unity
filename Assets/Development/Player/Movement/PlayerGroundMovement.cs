@@ -1,8 +1,9 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-[RequireComponent(typeof(Rigidbody), typeof(PlayerFlightMovement))]
+[RequireComponent(typeof(Rigidbody), typeof(PlayerFlightMovement), typeof(StaminaSystem))]
 
 public class PlayerGroundMovement : MonoBehaviour
 {
@@ -10,19 +11,27 @@ public class PlayerGroundMovement : MonoBehaviour
     Rigidbody playerBody;
     StaminaSystem playerStamina;
     PlayerFlightMovement playerFlightMovement;
+    PlayerStealthSystem playerStealthComponent;
+    PlayerStateController playerStateController;
     static GroundCheck groundCheck;
     Transform cameraRef;
 
+    [SerializeField] private PlayerInput input;
+
+    [Header("Additional Requirements")]
+    [SerializeField] GameObject crouchVinete;
 
     // movement variables
     [Header("Movement Speed: ")]
     [SerializeField] float moveSpeed = 500f;
     [SerializeField] float maxSpeed = 4f;
     [SerializeField] float crouchSpeed = 2f;
+    [SerializeField] float sprintSpeed = 6f;
     [SerializeField] float jumpHeight = 150f;
 
-    float currentMaxSpeed;
+    [SerializeField]float currentMaxSpeed;
     float currentSpeed;
+
 
     [Header("Counter Movement: ")]
     [SerializeField] float counterMovement = 0.175f;
@@ -38,21 +47,53 @@ public class PlayerGroundMovement : MonoBehaviour
 
     [Header("Other Variables")]
     [SerializeField] float rotationLerpSpeed = 0.1f;
+    [SerializeField] float sprintStaminaAmount = 0.2f;
+    [SerializeField] float sprintTriggerStaminaTime = .5f;
 
 
     //playerInput
     float x, z;
-    bool jumping, crouching;
+    bool crouching, sprinting;
     bool isJumping = false;
-    bool isFlying = false;
+    //bool isFlying = false;
+    float sprintTimer = 0f;
 
     InputAction moveAction;
     InputAction jumpAction;
+    InputAction sprintAction;
+    InputAction crouchAction;
+
+    public float GetSpeedForward()
+    {
+        if (z != 0)
+            return Mathf.Abs(z);
+        else
+            return Mathf.Abs(x);
+    }
+
+    public float GetSpeedSide()
+    {
+        return x;
+    }
+
+    public bool GetIsJumping()
+    {
+        return isJumping;
+    }
+
+    public bool GetIsFlying()
+    {
+        // === refactored for PSC - Jacob. hope this works :0 ===
+        //return isFlying;
+        return playerStateController.CurrentState == PlayerState.FlyMove;;
+    }
 
     private void Awake()
     { 
         playerBody = GetComponent<Rigidbody>();
         playerStamina = GetComponent<StaminaSystem>();
+        playerStealthComponent = GetComponent<PlayerStealthSystem>();
+        playerStateController = GetComponent<PlayerStateController>();
 
         stepRayUpper.transform.localPosition = new Vector3(stepRayUpper.transform.localPosition.x, stepHeight, stepRayUpper.transform.localPosition.z);
     }
@@ -63,30 +104,37 @@ public class PlayerGroundMovement : MonoBehaviour
         cameraRef = Camera.main.transform;
         groundCheck = GetComponentInChildren<GroundCheck>();
         playerFlightMovement = GetComponent<PlayerFlightMovement>();
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+
+
+        currentMaxSpeed = maxSpeed;
 
         moveAction = InputSystem.actions.FindAction("Move");
         jumpAction = InputSystem.actions.FindAction("Jump");
+        sprintAction = InputSystem.actions.FindAction("Sprint");
+        crouchAction = InputSystem.actions.FindAction("Crouch");
+
+        input = GetComponent<PlayerInput>();
+
+        PlayerInput();
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (!isFlying)
-            PlayerInput();
+       // if (!isFlying)
+           // PlayerInput();
     }
 
     void FixedUpdate()
     {
-        if (crouching)
-            currentMaxSpeed = crouchSpeed;
-        else
-            currentMaxSpeed = maxSpeed;
+        //if (isFlying) === refactored for PSC - Jacob ===
+        if (playerStateController.CurrentState != PlayerState.GroundMove)
+            return;
 
         Movement();
-        if (jumping)
-            Jump();
+
+        if (sprinting)
+            Sprint();
 
         if (isJumping)
             if (groundCheck.IsGrounded())
@@ -95,22 +143,39 @@ public class PlayerGroundMovement : MonoBehaviour
 
     void PlayerInput()
     {
-        // check x and z axis movement
-        x = moveAction.ReadValue<Vector2>().x;
-        z = moveAction.ReadValue<Vector2>().y;
+        //x = moveAction.ReadValue<Vector2>().x;
+        //z = moveAction.ReadValue<Vector2>().y;
+
         // check if player hits spacebar
-        jumpAction.started += ctx => Jump();
+        jumpAction.performed += ctx => Jump();
         // check if player crouches with C or left Control
-        crouching = Input.GetKey(KeyCode.C) || Input.GetKey(KeyCode.LeftControl);
+        crouchAction.started += ctx => StartCrouch();
+        crouchAction.canceled += ctx => EndCrouch();
+        sprintAction.started += ctx => StartSprint();
+        sprintAction.canceled += ctx => EndSprint();
     }
 
     void Movement()
     {
+        //if (isFlying) === refactored for PSC - Jacob ===
+        if (playerStateController.CurrentState != PlayerState.GroundMove)
+            return;
+
+        x = moveAction.ReadValue<Vector2>().x;
+        z = moveAction.ReadValue<Vector2>().y;
+
+        if (x == 0 && z == 0)
+        {
+            //playerBody.linearVelocity = new Vector3(0, playerBody.linearVelocity.y, 0);
+            CounterMovement(x, z, FindVelRelativeToLook());
+            return;
+        }
+
         if (x != 0 || z != 0)
             StepClimb();
 
         //Set max speed
-        float maxSpeed = currentMaxSpeed;
+        //float maxSpeed = currentMaxSpeed;
 
         // add extra gravity to the player
         playerBody.AddForce(Vector3.down * Time.deltaTime * Physics.gravity.y);
@@ -124,37 +189,108 @@ public class PlayerGroundMovement : MonoBehaviour
         // Counteract sliding and sloppy movement
         CounterMovement(x, z, mag);
 
+        if (z != 0)
+            transform.eulerAngles = new Vector3(transform.eulerAngles.x, Mathf.LerpAngle(transform.eulerAngles.y, cameraRef.eulerAngles.y - 90 + (90 * z + 45 * x * z), rotationLerpSpeed), transform.eulerAngles.z);
+        else
+            transform.eulerAngles = new Vector3(transform.eulerAngles.x, Mathf.LerpAngle(transform.eulerAngles.y, cameraRef.eulerAngles.y + (90 * x), rotationLerpSpeed), transform.eulerAngles.z);
+
         // check whether adding speed will bring player over max speed
-        if (x > 0 && xMag > maxSpeed) x = 0;
-        if (x < 0 && xMag < -maxSpeed) x = 0;
-        if (z > 0 && yMag > maxSpeed) z = 0;
-        if (z < 0 && yMag < -maxSpeed) z = 0;
+        if (x > 0 && xMag > currentMaxSpeed) x = 0;
+        if (x < 0 && xMag < -currentMaxSpeed) x = 0;
+        if (z > 0 && yMag > currentMaxSpeed) z = 0;
+        if (z < 0 && yMag < -currentMaxSpeed) z = 0;
 
 
-        if (z > 0)
-        {
-            transform.eulerAngles = new Vector3(transform.eulerAngles.x, Mathf.LerpAngle(transform.eulerAngles.y, cameraRef.eulerAngles.y, rotationLerpSpeed), transform.eulerAngles.z);
-        }
         //Apply forces to playerBody
-        playerBody.AddForce(transform.forward * z * currentSpeed * Time.deltaTime);
-        playerBody.AddForce(transform.right * x * currentSpeed * Time.deltaTime);      
+        playerBody.AddForce(transform.forward * Mathf.Abs(z) * currentSpeed * Time.deltaTime);
+        playerBody.AddForce(transform.forward * Mathf.Abs(x) * currentSpeed * Time.deltaTime);
     }
 
     void Jump()
     {
-        if (!isFlying)
+        if (input.currentActionMap != input.actions.FindActionMap("Player")) return;
+
+        //if (isFlying)
+        if (playerStateController.CurrentState != PlayerState.GroundMove)
+            return;
+
+        // check if player is on the ground to jump
+        if (groundCheck.IsGrounded() && !isJumping)
         {
-            // check if player is on the ground to jump
-            if (groundCheck.IsGrounded() && !isJumping)
-            {
-                isJumping = true;
-                // add verticle force to make the player jump
-                playerBody.AddForce(transform.up * jumpHeight);
-            }
-            else
-            {
-                InitiateFlight();
-            }
+            isJumping = true;
+            // add verticle force to make the player jump
+            playerBody.AddForce(transform.up * jumpHeight);
+        }
+        else
+        {
+            InitiateFlight();
+        }
+        
+    }
+
+    void StartCrouch()
+    {
+        //if (isFlying || sprinting)
+        if(playerStateController.CurrentState != PlayerState.GroundMove || sprinting)
+            return;
+
+        if (!crouching)
+        {
+            crouchVinete.SetActive(true);
+            crouching = true;
+            currentMaxSpeed = crouchSpeed;
+            playerStealthComponent.ToggleStealthOn();
+        }
+    }
+
+    void EndCrouch()
+    {
+        if (crouching)
+        {
+            crouchVinete.SetActive(false);
+            crouching = false;
+            currentMaxSpeed = maxSpeed;
+            playerStealthComponent.ToggleStealthOff();
+        }
+    }
+
+    void StartSprint()
+    {
+        //if (isFlying || crouching)
+        if(playerStateController.CurrentState != PlayerState.GroundMove || sprinting)
+
+            return;
+
+        if (playerStamina.UseStamina(sprintStaminaAmount))
+        {
+            sprinting = true;
+            currentMaxSpeed = sprintSpeed;
+        }
+    }
+
+    void Sprint()
+    {
+        if (!sprinting)
+            return;
+
+        if (sprintTimer < sprintTriggerStaminaTime)
+            sprintTimer += Time.deltaTime;
+        else if (sprintTimer >= sprintTriggerStaminaTime)
+        {
+            sprintTimer -= sprintTriggerStaminaTime;
+            if (!playerStamina.UseStamina(sprintStaminaAmount))
+                EndSprint();
+        }
+
+    }
+
+    void EndSprint()
+    {
+        if (sprinting)
+        {
+            sprinting = false;
+            currentMaxSpeed = maxSpeed;
+            playerStamina.RegenStamina();
         }
     }
 
@@ -187,11 +323,11 @@ public class PlayerGroundMovement : MonoBehaviour
         //Counter movement based on direction of movement
         if (Mathf.Abs(mag.x) > threshold && Mathf.Abs(x) < 0.05f || (mag.x < -threshold && x > 0) || (mag.x > threshold && x < 0))
         {
-            playerBody.AddForce(moveSpeed * transform.right * Time.deltaTime * -mag.x * counterMovement);
+            playerBody.AddForce(transform.right * (moveSpeed * Time.deltaTime * -mag.x * counterMovement));
         }
         if (Mathf.Abs(mag.y) > threshold && Mathf.Abs(y) < 0.05f || (mag.y < -threshold && y > 0) || (mag.y > threshold && y < 0))
         {
-            playerBody.AddForce(moveSpeed * transform.forward * Time.deltaTime * -mag.y * counterMovement);
+            playerBody.AddForce(transform.forward * (moveSpeed * Time.deltaTime * -mag.y * counterMovement));
         }
 
         // Limit the speed of diagonal running to the maxSpeed
@@ -206,6 +342,8 @@ public class PlayerGroundMovement : MonoBehaviour
         }
     }
 
+    
+    // === I feel like this could somehow be made more elegant - Jacob ===
     void StepClimb()
     {
         RaycastHit hitLower;
@@ -259,9 +397,12 @@ public class PlayerGroundMovement : MonoBehaviour
         }
     }
 
+    
+    // === refactored for PSC - Jacob === 
     public void InitiateFlight()
     {
-        isFlying = true;
+        //isFlying = true;
+        playerStateController.EnterFlyMode();
         playerBody.useGravity = false;
         playerStamina.CancelRegen();
         playerFlightMovement.InitiateFlight();
@@ -269,10 +410,11 @@ public class PlayerGroundMovement : MonoBehaviour
 
     public void InitiateWalkState()
     {
-        isFlying = false;
+        //isFlying = false;
+        playerStateController.ExitFlyMode();
         playerBody.useGravity = true;
         if (groundCheck.IsGrounded())
             playerStamina.RegenStamina();
-    }
+    } 
 
 }

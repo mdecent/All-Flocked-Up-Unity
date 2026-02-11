@@ -14,44 +14,39 @@ public class BusScript : VehicleBase
         
     }
 
-    protected override void SetMoveToLocation(Transform location)
+    protected override void SetMoveToLocation(Waypoint location)
     {
-        currentLocation = location;
+
     }
 
     //call this to run like wind
-    protected override void MoveVehicleToLocation()
+    public override void MoveVehicleToLocation()
     {
-        base.navAgent.SetDestination(currentLocation.position);
+        base.MoveVehicleToLocation();
     }
 
-    protected override void StopVehicle()
+    public override void StopVehicle()
     {
         base.navAgent.isStopped = true;
     }
 
-    protected override void CheckForCollisions()
+    public override void TriggerCollisions()
     {
-        RaycastHit hit;
-        if (Physics.SphereCast(transform.position, 5f, transform.forward * detectObjectRange, out hit, trafficLayer))
-        {
-            StopVehicle();
-            HonkHorn();
-        }
-        if (Physics.SphereCast(transform.position, 5f, transform.forward * detectObjectRange, out hit, playerLayer))
-        {
-            StopVehicle();
-            HonkHorn();
-        }
-        if (Physics.SphereCast(transform.position, 5f, transform.forward * detectObjectRange, out hit, enemyLayer))
-        {
-            StopVehicle();
-            HonkHorn();
-        }
+        base.TriggerCollisions();
     }
 
     protected override void HonkHorn()
     {
         //add horn SFX/possible headlight VFX? 
+    }
+
+    public void SendCollisions()
+    {
+        TriggerCollisions();
+    }
+
+    public void SpeedUp()
+    {
+        base.navAgent.speed = 4f;
     }
 }
