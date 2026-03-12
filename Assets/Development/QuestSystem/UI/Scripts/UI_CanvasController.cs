@@ -96,6 +96,18 @@ public class UI_CanvasController : MonoBehaviour
     [Header("Health")]
     [SerializeField] private RespawnController respawnCanvasPrefab;
     public RespawnController activeRespawnCanvas;
+    [Header("LevelTransition")]
+    [SerializeField] private UI_LevelTransition levelTransitionPrefab;
+    public UI_LevelTransition activeLevelTransition;
+    public string cachedLevelName;
+    public LevelTransition transitionObj;
+    [Header("TutorialPrompt")]
+    [SerializeField] private TutorialPrompt promptPrefab;
+    public TutorialPrompt activeTutPrompt;
+    public int cachedTutPromptIndex;
+    [Header("SkinSelector")]
+    [SerializeField] private UI_SkinSelector skinSelectorPrefab;
+    public UI_SkinSelector activeSkinSelector;
 
     private void Start()
     {
@@ -106,10 +118,16 @@ public class UI_CanvasController : MonoBehaviour
         {
             enemies.Add(agent);  
         }
+        if (SceneManager.GetActiveScene().name != "MainMenu")
+        {
+            ShowPlayerCursor();
+            HidePlayerCursor();
+        }
 
-        SpawnMainMenu();
-        OpenLanguageSelect(); //remove after testing
+        //SpawnMainMenu();
+        //OpenLanguageSelect(); //remove after testing
     }
+
 
     public void FreezeEnemies()
     {
@@ -157,7 +175,7 @@ public class UI_CanvasController : MonoBehaviour
     public void ShowPlayerCursor()
     {
         SetUIMap();
-        if (Mouse.current != null &&  Mouse.current.wasUpdatedThisFrame)
+        if (Mouse.current != null && Mouse.current.wasUpdatedThisFrame)
         {
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.Confined;
@@ -458,6 +476,7 @@ public class UI_CanvasController : MonoBehaviour
     {
         activeNestInstance = Instantiate(nestMenuCanvas);
         activeNestInstance.canvasController = this; 
+        activeNestInstance.playerStats = player.GetComponent<PlayerCounter>();    
         ShowPlayerCursor();
     }
 
@@ -518,27 +537,6 @@ public class UI_CanvasController : MonoBehaviour
 
     }
 
-    public void SpawnMainMenu()
-    {
-        if (activeMainMenu == null  && SceneManager.GetActiveScene().name == "Cootorial Island")
-        {
-            activeMainMenu = Instantiate(mainMenuCanvas,mainMenuSpawnPoint);
-            ShowPlayerCursor();
-            Debug.Log("Spawned");
-        }
-        Debug.Log("Called");
-    }
-
-    public void DestroyMainMenu()
-    {
-        if(activeMainMenu != null)
-        {
-            Destroy(activeMainMenu.gameObject);
-            activeMainMenu = null;
-            HidePlayerCursor();
-           // Object.FindFirstObjectByType<PlayerSkinSelector>().StartSkinSelector();
-        }
-    }
 
     public void OpenBugReporter()
     {
@@ -614,7 +612,6 @@ public class UI_CanvasController : MonoBehaviour
     {
         if(activeLanguageCanvas != null)
         {
-            HidePlayerCursor();
             Destroy(activeLanguageCanvas.gameObject);
             
         }
@@ -624,7 +621,11 @@ public class UI_CanvasController : MonoBehaviour
     public void OpenRespawn()
     {
         activeRespawnCanvas = Instantiate(respawnCanvasPrefab);
-        ShowPlayerCursor() ;
+        if(activeRespawnCanvas != null)
+        {
+            activeRespawnCanvas.canvasController = this;
+            ShowPlayerCursor();
+        }
     }
 
     public void CloseRespawn()
@@ -635,5 +636,65 @@ public class UI_CanvasController : MonoBehaviour
             HidePlayerCursor();
         }
     }
+
+    public void OpenLevelTransition()
+    {
+        if (activeLevelTransition == null)
+        {
+            activeLevelTransition = Instantiate(levelTransitionPrefab);
+            activeLevelTransition.sceneName = cachedLevelName;
+            activeLevelTransition.transitionObj = transitionObj;
+            ShowPlayerCursor() ;
+        }
+    }
+
+    public void CloseLevelTransition()
+    {
+        if (activeLevelTransition != null)
+        {
+            Destroy(activeLevelTransition.gameObject);
+            HidePlayerCursor();
+        }
+    }
+
+    public void ShowTutorialPrompt()
+    {
+        if(activeTutPrompt == null)
+        {
+            activeTutPrompt = Instantiate(promptPrefab);
+            activeTutPrompt.promptIndex = cachedTutPromptIndex;
+            activeTutPrompt.canvasController = this;
+            //ShowPlayerCursor() ;
+        }
+    }
+
+    public void DestroyPrompt()
+    {
+        if(activeTutPrompt != null)
+        {
+           // HidePlayerCursor();
+            Destroy(activeTutPrompt.gameObject);
+            cachedTutPromptIndex = -1;
+        }
+    }
+
+    public void ShowSkinSelector()
+    {
+        if(activeSkinSelector == null)
+        {
+            activeSkinSelector = Instantiate(skinSelectorPrefab);
+            ShowPlayerCursor();
+        }
+    }
+
+    public void HideSkinSelector()
+    {
+        if(activeSkinSelector != null)
+        {
+            Destroy(activeSkinSelector.gameObject);
+            HidePlayerCursor();
+        }
+    }
+
 
 }

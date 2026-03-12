@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 public class UI_SettingsMenu : UI_PauseMenu
 {
+    public GameObject parent;
     [Header("Settings")]
     [SerializeField] private Button closeSettingsButton;
     [SerializeField] private Button videoButton;
@@ -23,13 +24,14 @@ public class UI_SettingsMenu : UI_PauseMenu
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        closeSettingsButton.onClick.AddListener(OnSettingsOpen);
+        closeSettingsButton.onClick.AddListener(CloseSettings);
         videoButton.onClick.AddListener(OpenVideoOptions);
         videoBackButton.onClick.AddListener(OpenVideoOptions);
         audioButton.onClick.AddListener(OpenAudioOptions);
         audioBackButton.onClick.AddListener(OpenAudioOptions);
         accessButton.onClick.AddListener(OpenAccessOptions);
         accessBackButton.onClick.AddListener(OpenAccessOptions);
+        SetFirstSettingsButton();
     }
 
     public void SetFirstSettingsButton()
@@ -37,12 +39,10 @@ public class UI_SettingsMenu : UI_PauseMenu
         EventSystem.current.SetSelectedGameObject(videoButton.gameObject);
     }
 
-
-    protected new void OnSettingsOpen()
+    protected void CloseSettings()
     {
-        base.OnSettingsOpen();
-    }
 
+    }
     protected void OpenVideoOptions()
     {
         if (!videoOpen)
@@ -52,7 +52,7 @@ public class UI_SettingsMenu : UI_PauseMenu
             videoParent.gameObject.GetComponent<UI_VideoOptions>().SetFirstVideoButton();
             Debug.Log("Hello");
         }
-        else if (accessOpen)
+        else if (videoOpen)
         {
             videoOpen = false;
             videoParent.gameObject.SetActive(false);

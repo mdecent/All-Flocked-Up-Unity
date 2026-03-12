@@ -8,6 +8,7 @@ public class Pooper : MonoBehaviour
 {
     [SerializeField] private PoopSystem poopSystem;
     [SerializeField] private PoopFunction poopFunction;
+    public PoopType poopType;
     [SerializeField] private Camera cam;
     [SerializeField] private LayerMask poopableLayer;
     [SerializeField] private float maxRange = 20f; //Adjust as needed for gameplay
@@ -65,20 +66,23 @@ public class Pooper : MonoBehaviour
             aimAction.canceled += OnAimCanceled;
             poopAction.performed += OnPoopPerformed;
         }
+        poopType = poopFunction.currentPoopType;
+        startRot = mesh.transform.localRotation;
     }
 
     private void Update()
     {
         if (!isTurning) return;
-        
-        spinTime += Time.deltaTime / spinDuration;
-
-        float easeTime = Mathf.SmoothStep(0f, 1f, spinTime);
-        mesh.transform.rotation = Quaternion.Slerp(startRot, endRot, easeTime);
-        if (spinTime >= 1f)
+        if (spinTime<1)
         {
-            mesh.transform.localRotation = endRot;
-            isTurning = false;
+            spinTime += Time.deltaTime / spinDuration;
+
+            float easeTime = Mathf.SmoothStep(0f, 1f, spinTime);
+            mesh.transform.localRotation = Quaternion.Slerp(startRot, endRot, easeTime);
+            if (spinTime >= 1f)
+            {
+                isTurning = false;
+            }
         }
 
     }
@@ -96,9 +100,7 @@ public class Pooper : MonoBehaviour
     {
         isAiming = true;
         Debug.Log("Aiming started");
-        startRot = mesh.transform.localRotation;
         endRot = startRot * Quaternion.Euler(0f, 180f, 0f);
-
         spinTime = 0f;
         isTurning = true;
         //Show aiming UI here if needed
@@ -109,8 +111,7 @@ public class Pooper : MonoBehaviour
     {
         isAiming = false;
         Debug.Log("Aiming canceled");
-        startRot = mesh.transform.localRotation;
-        endRot = startRot * Quaternion.Euler(0f, -180f, 0f);
+        endRot = startRot;
         spinTime = 0f;
         isTurning = true;
         //Hide aiming UI here if needed
@@ -139,6 +140,7 @@ public class Pooper : MonoBehaviour
 
                 //Get player velocity from pigeon rigidbody
                 Vector3 playerVelocity = pigeon.linearVelocity;
+                poopFunction.currentPoopType = poopType;
                 poopFunction.FirePoop(target, playerVelocity);
             }
         }else

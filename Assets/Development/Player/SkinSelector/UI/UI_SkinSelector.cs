@@ -20,8 +20,8 @@ public class UI_SkinSelector : MonoBehaviour
         previousButton.onClick.AddListener(PreviousSkin);
         nextButton.onClick.AddListener(NextSkin);
         confirmButton.onClick.AddListener(SetSkinToPlayer);
-        Cursor.visible = true;
-        Cursor.lockState = CursorLockMode.Confined;
+        //Cursor.visible = true;
+        //Cursor.lockState = CursorLockMode.Confined;
         EventSystem.current.SetSelectedGameObject(confirmButton.gameObject);
     }
     
@@ -37,8 +37,8 @@ public class UI_SkinSelector : MonoBehaviour
 
     void SetSkinToPlayer()
     {
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
+        //Cursor.visible = false;
+        //Cursor.lockState = CursorLockMode.Locked;
         playerComp.ConfirmSelection();
         playerComp.DestroyBackdrop();
         input.SwitchCurrentActionMap("Player");
