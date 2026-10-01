@@ -1,6 +1,6 @@
+using NUnit.Framework.Constraints;
 using System;
-using System.Runtime.CompilerServices;
-using Unity.VisualScripting;
+using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -9,9 +9,10 @@ public class Pooper : MonoBehaviour
     [SerializeField] private PoopSystem poopSystem;
     [SerializeField] private PoopFunction poopFunction;
     public PoopType poopType;
-    [SerializeField] private Camera cam;
+    [SerializeField] private CinemachineOrbitalFollow cam;
     [SerializeField] private LayerMask poopableLayer;
     [SerializeField] private float maxRange = 20f; //Adjust as needed for gameplay
+    UI_HudController hudController;
 
     //[SeralizeField] private PoopArcRenderer arcRenderer; option for visualizing the arc, not yet implemented
 
@@ -36,6 +37,8 @@ public class Pooper : MonoBehaviour
 
     //Switching to new input system - JK Oct/23
 
+    public void CallReloadPoop() { poopSystem.ReloadPoop(); }
+
     public bool GetIsAiming()
     {
         return isAiming;
@@ -46,10 +49,26 @@ public class Pooper : MonoBehaviour
         isFlying = groundComp.GetIsFlying();
         return isFlying;
     }
+
+    public void SetPoopType(PoopType type)
+    {
+        poopType = type;
+    }
     private void Start()
     {
         groundComp = GetComponent<PlayerGroundMovement>();
         playerInput = GetComponentInParent<PlayerInput>();
+        hudController = FindAnyObjectByType<UI_HudController>();
+        
+        var camArray = FindObjectsByType<CinemachineOrbitalFollow>();
+        foreach(var found in camArray)
+        {
+            if (found.CompareTag("Player"))
+            {
+                cam = found;
+            }
+        }
+        player = this.gameObject;
         Debug.Log($"PlayerInput: {playerInput != null}");
 
         //Set up input actions
@@ -72,6 +91,19 @@ public class Pooper : MonoBehaviour
 
     private void Update()
     {
+        if (GetIsFlying())
+        {
+            if (GetIsAiming())
+            {
+                cam.TargetOffset = new Vector3(0, 3.5f, 0);
+            }
+            else cam.TargetOffset = new Vector3(0, 0, 0); 
+        }
+        if (GetIsFlying()==false && isAiming && !isTurning)
+        {
+            RotateMeshToCamera();
+        }
+
         if (!isTurning) return;
         if (spinTime<1)
         {
@@ -85,6 +117,22 @@ public class Pooper : MonoBehaviour
             }
         }
 
+
+    }
+
+    void RotateMeshToCamera()
+    {
+        var offset = Quaternion.Euler(0f, 180f, 0f);
+        Vector3 forward = -Camera.main.transform.forward;
+        forward.y = 0f;
+
+        Quaternion targetRot = Quaternion.LookRotation(forward);
+
+        mesh.transform.rotation = Quaternion.Slerp(
+            mesh.transform.rotation,
+            targetRot ,
+            12f * Time.deltaTime
+        );
     }
     private void OnDestroy()
     {
@@ -99,16 +147,25 @@ public class Pooper : MonoBehaviour
     private void OnAimStarted(InputAction.CallbackContext ctx)
     {
         isAiming = true;
-        Debug.Log("Aiming started");
-        endRot = startRot * Quaternion.Euler(0f, 180f, 0f);
-        spinTime = 0f;
-        isTurning = true;
-        //Show aiming UI here if needed
+        if (groundComp.GetIsFlying() == false)
+        {
+            groundComp.enabled = false;
+            hudController.ShowReticle();
+            Debug.Log("Aiming started");
+            endRot = startRot * Quaternion.Euler(0f, 180f, 0f);
+            spinTime = 0f;
+            isTurning = true;
+        }
+        else return;
 
+        //Show aiming UI here if needed
     }
+
 
     private void OnAimCanceled(InputAction.CallbackContext ctx)
     {
+        groundComp.enabled = true;
+        hudController.HideReticle();
         isAiming = false;
         Debug.Log("Aiming canceled");
         endRot = startRot;
@@ -131,39 +188,49 @@ public class Pooper : MonoBehaviour
 
     private void TryPooping(bool isFlying)
     {
+        poopFunction.SetPoopType(poopType);
         if (isFlying)
         {
-            Debug.Log("FlyingPoopCalled");
             if (poopSystem.TryPoop())
             {
-                Vector3 target = GetTarget();
+                Vector3 distanceCalc = pigeon.transform.position + new Vector3(pigeon.linearVelocity.x, 0f, pigeon.linearVelocity.z) * Mathf.Sqrt((pigeon.transform.position.y * 2) / MathF.Abs(Physics.gravity.y));
+                distanceCalc.y = 0f;
+                (GameObject, bool) target = GetTarget(distanceCalc);
 
                 //Get player velocity from pigeon rigidbody
                 Vector3 playerVelocity = pigeon.linearVelocity;
-                poopFunction.currentPoopType = poopType;
-                poopFunction.FirePoop(target, playerVelocity);
+                poopFunction.FirePoop(target.Item2, target.Item1, playerVelocity);
             }
         }else
-        if (poopSystem.TryPoop())
+        if (!isFlying && isAiming)
         {
-            if (isAiming)
+            if (poopSystem.TryPoop())
             {
                 poopFunction.FireGroundPoop();
             }
         }
     }
 
-    private Vector3 GetTarget()
+    private (GameObject, bool) GetTarget(Vector3 shotLocation)
     {
-        Ray ray = new Ray(cam.transform.position, cam.transform.forward);
-
-        if (Physics.Raycast(ray, out RaycastHit hit, maxRange, poopableLayer))
+        RaycastHit hit;
+        if (Physics.SphereCast(transform.position,2f,(shotLocation-transform.position).normalized,out hit,100f,poopableLayer))
         {
-            return hit.point;
-        }
-
-        return cam.transform.position + cam.transform.forward * maxRange;
+            return (hit.transform.gameObject, true);
+        }else return (null, false);
     }
 
+    private void OnLevelWasLoaded(int level)
+    {
+        hudController = FindAnyObjectByType<UI_HudController>();
+        var camArray = FindObjectsByType<CinemachineOrbitalFollow>();
+        foreach (var found in camArray)
+        {
+            if (found.CompareTag("Player"))
+            {
+                cam = found;
+            }
+        }
+    }
 
 }

@@ -1,11 +1,14 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.InputSystem;
+using Unity.Cinemachine;
 
 
 public class RaceBase : MonoBehaviour
 {
-    [SerializeField] private GameObject playerRef => GetPlayer();
+    private GameObject playerRef => GetPlayer();
+    PlayerNavArrow navArrow;
     [SerializeField] private UI_CanvasController canvasController;
     public RaceData raceData => GetRaceData(currentRaceGiver.raceData);
     [SerializeField] private RaceCheckpoint checkpointPrefab;
@@ -24,7 +27,7 @@ public class RaceBase : MonoBehaviour
     [SerializeField] private bool timerStarted;
     [SerializeField] private bool countdownStarted;
     public bool countdownComplete;
-    [SerializeField] private StartingLine currentRaceStartingLine => raceData.GetStartLine();
+    private StartingLine currentRaceStartingLine => raceData.GetStartLine();
     public StartingLine raceStartLine => currentRaceStartingLine;
     [SerializeField] private List<CPURacer> currentRacerList = new();
     [SerializeField] private CPURacer racerPrefab;
@@ -34,16 +37,14 @@ public class RaceBase : MonoBehaviour
     public float countdown = 5;
     public float recordTime;
 
-    private RaceWallSpawner wallSpawner;
-
     private void Awake()
     {
-        canvasController = FindFirstObjectByType<UI_CanvasController>();
-        wallSpawner = GetComponent<RaceWallSpawner>();
+        canvasController = FindAnyObjectByType<UI_CanvasController>();
     }
 
     private void Start()
     {
+        navArrow = playerRef.GetComponent<PlayerNavArrow>();
         if (activeCheckpoints.Count > 0)
             lastCheckpoint = activeCheckpoints[activeCheckpoints.Count - 1];
     }
@@ -77,7 +78,6 @@ public class RaceBase : MonoBehaviour
 
     private float StartRaceTimer(float raceTime)
     {
-        StartPlayerMove();
         currentTime = raceTime;
         timerStarted = true;
         return currentTime;
@@ -89,6 +89,21 @@ public class RaceBase : MonoBehaviour
         {
             currentTime -= Time.deltaTime;
             if (currentTime <= 0 && !raceFailed) { raceFailed = true; RaceFailed(); }
+        }
+    }
+
+    public void UpdatePlayerArrow(int index)
+    {
+        if(index == 0)
+        {
+            navArrow.EnablePointerArrow(activeCheckpoints[0].gameObject);
+            return;
+        }
+        else
+        {
+            var next = activeCheckpoints[index + 1].gameObject;
+            navArrow.EnablePointerArrow(next);
+            return;
         }
     }
 
@@ -121,6 +136,7 @@ public class RaceBase : MonoBehaviour
     {
         GetRaceData(currentRaceGiver.raceData);
         StartRace();
+        currentRaceGiver.enabled = false;
         countdownStarted = true;
     }
 
@@ -145,15 +161,18 @@ public class RaceBase : MonoBehaviour
         {
             racer.StartMoving();
         }
+        StartPlayerMove();
+        UpdatePlayerArrow(0);
     }
 
     private void SpawnCheckpoints()
     {
+        int count = activeCheckpoints.Count;
         foreach (var checkpoint in activeCheckpoints)
         {
             checkpoint.ShowCheckpoint();
         }
-        lastCheckpoint = activeCheckpoints[activeCheckpoints.Count - 1];
+        lastCheckpoint = activeCheckpoints[count-1];
     }
 
     public void UpdateCheckpoints(int hitPoint)
@@ -180,17 +199,18 @@ public class RaceBase : MonoBehaviour
     {
         raceStarted = false;
         GetRaceResults();
-        DestroyCheckpoints();
-        raceStarted = false;
         DestroyRacers();
+        navArrow.DestroyArrow();
         canvasController.OpenRaceRewards();
+        DestroyCheckpoints();
     }
 
     private void RaceFailed()
     {
-        StopPlayerMove();
         raceStarted = false;
+        navArrow.DestroyArrow();
         canvasController.OpenRaceFail();
+        DestroyCheckpoints();
     }
 
 
@@ -204,11 +224,6 @@ public class RaceBase : MonoBehaviour
         activeCheckpoints.Clear();
     }
 
-    public void GiveRewards()
-    {
-        var reward = raceData.raceRewards;
-        FindFirstObjectByType<EXPSystem>().IncrementXP(reward);
-    }
     private void SetStartLine()
     {
         Debug.Log(currentRaceStartingLine.name);
@@ -218,14 +233,21 @@ public class RaceBase : MonoBehaviour
     private void MovePlayerToStartLine()
     {
         playerRef.transform.position = raceStartLine.transform.position;
-        playerRef.transform.rotation = raceStartLine.transform.rotation;
+        playerRef.transform.eulerAngles = new Vector3(0, raceStartLine.transform.eulerAngles.y, 0);
+        CinemachineOrbitalFollow comp;
+        TryGetComponent<CinemachineOrbitalFollow>(out comp);
+        if (comp != null)
+        {
+            comp.HorizontalAxis.Reset();
+        }
+
     }
 
     private void SetStartingRacerLocation()
     {
         //this will need to be changed depending on where the start line is located
-        Vector3 offset = new Vector3(0, 0, 2);
-        Vector3 row2offset = new Vector3(2, 0, 0);
+        Vector3 offset = new (0, 0, 2);
+        Vector3 row2offset = new (2, 0, 0);
         var gap = new Vector3(0, 0, 2);
         for (int i = 0; i < currentRacerList.Count; i++)
         {
@@ -267,7 +289,9 @@ public class RaceBase : MonoBehaviour
     {
         countdown = 5;
         countdownComplete = false;
-        timerStarted = false;
+        raceTimer = raceData.raceTime;
+        currentTime = raceTimer;
+        timerStarted = true;
         DestroyRacers();
         raceFailed = false;
         Debug.Log("ResetCalled");
@@ -297,7 +321,7 @@ public class RaceBase : MonoBehaviour
                 else if (racer.CompareTag("Player"))
                 {
                     playerFinishTime = currentTime;
-                    StopPlayerMove();
+                    racer.GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
                 }
                 Debug.Log($"{racer.name} finished the race!");
             }
@@ -324,12 +348,12 @@ public class RaceBase : MonoBehaviour
 
     public void StopPlayerMove()
     {
-        playerRef.GetComponent<PlayerGroundMovement>().enabled = false;
+        playerRef.GetComponent<PlayerInput>().enabled = false;
     }
 
     public void StartPlayerMove()
     {
-        playerRef.GetComponent<PlayerGroundMovement>().enabled = true;
+        playerRef.GetComponent<PlayerInput>().enabled = true;
     }
 
     [ContextMenu("RespawnPlayer")]

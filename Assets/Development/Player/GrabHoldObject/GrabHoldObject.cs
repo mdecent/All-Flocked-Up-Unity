@@ -23,47 +23,41 @@ public class GrabHoldObject : MonoBehaviour
         peckComp = GetComponent<PlayerPeckComponent>();
         playerInput = GetComponentInParent<PlayerInput>();
 
-        grabAction = playerInput.actions.FindAction("Grab");
+        grabAction = playerInput.actions.FindAction("Interact");
 
         if(grabAction != null )
         {
-            grabAction.performed += CallGrab;
-            grabAction.started += CallHold;
-            grabAction.canceled += CallRelease;
+
+                grabAction.started += OnGrabPressed;
+
+
+            
+            //grabAction.started += CallHold;
 
         }
     }
 
-    void GrabObject(InputAction.CallbackContext ctx)
+    private void Update()
     {
-        if (!isHoldingObject)
-        {
-            peckComp.Peck();
-            TryGrabObject();
-
-        }
-        else if (isHoldingObject)
-        {
-
-            ReleaseGrabbedObject();
-        }
-        else 
+        if( isHoldingObject )
         {
             HoldGrabbedObject(grabbedObject, grabOffset);
-
         }
-        
     }
 
-    private void CallGrab(InputAction.CallbackContext ctx)
+    void OnGrabPressed(InputAction.CallbackContext ctx)
     {
         if (!isHoldingObject)
         {
             peckComp.Peck();
             TryGrabObject();
-
+        }
+        else
+        {
+            ReleaseGrabbedObject();
         }
     }
+
 
 
 
@@ -71,44 +65,22 @@ public class GrabHoldObject : MonoBehaviour
     {
 
         RaycastHit hit;
-        if(Physics.Raycast(grabPoint.transform.position, transform.forward, out hit, grabDistance, grabLayer))
+        if(Physics.Raycast(grabPoint.transform.position, transform.forward + (Vector3.down*2), out hit, grabDistance, grabLayer))
         {
             grabbedObject = hit.collider.gameObject;
             PickUpObject(grabbedObject);
 
         }
 
-        if (Physics.Raycast(grabPoint.transform.position, transform.forward, out hit, grabDistance, consumeLayer))
-        {
-            grabbedObject = hit.collider.gameObject;
-            var comp = hit.collider.gameObject.GetComponentInParent<PlayerHealth>();
-            if (comp !=null && comp.currentHealth < comp.maxHealth)
-            {
-                grabbedObject.GetComponentInParent<ConsumableBase>().UseConsumable();
-            }
-            else
-            {
-                var inv = GetComponentInParent<PlayerWingventory>();
-                inv.AddItemToInv(hit.collider.gameObject,1);
-            }
 
-        }
-
-        if (Physics.Raycast(grabPoint.transform.position, transform.forward, out hit, grabDistance, collectLayer))
-        {
-            grabbedObject = hit.collider.gameObject;
-            var comp = hit.collider.gameObject.GetComponent<TrinketScript>();
-            comp.CollectTrinket(comp.value);
-
-        }
     }
 
-    private void PickUpObject(GameObject Object)
+    private void PickUpObject(GameObject obj)
     {
         Vector3 offset = new();
         try
         {
-            offset = Object.GetComponent<Interactable>().offset;
+            offset = obj.GetComponent<Interactable>().offset;
 
         }
         catch
@@ -118,53 +90,39 @@ public class GrabHoldObject : MonoBehaviour
         finally
         {
 
-            Object.transform.position = grabPoint.transform.localPosition+ offset;
-            Object.transform.rotation = grabPoint.transform.localRotation;
+            obj.transform.position = grabPoint.transform.localPosition+ offset;
+            obj.transform.rotation = grabPoint.transform.localRotation;
             grabOffset = offset;
-            Object.GetComponent<Rigidbody>().useGravity = false;
-            Object.transform.SetParent(grabPoint.transform, false);
-            grabbedObject.GetComponent<BoxCollider>().enabled = false;
+            obj.GetComponent<Rigidbody>().useGravity = false;
+            obj.transform.SetParent(grabPoint.transform, false);
+            obj.GetComponent<BoxCollider>().enabled = false;
             isHoldingObject = true;
-            HoldGrabbedObject(Object, offset);
+            obj.GetComponent<Interactable>().ToggleVFXOn();
+            HoldGrabbedObject(obj, offset);
         }
 
     }
 
-    private void CallHold(InputAction.CallbackContext ctx)
-    {
-        HoldGrabbedObject(grabbedObject, grabOffset);
-    }
 
-    private void HoldGrabbedObject(GameObject Object, Vector3 offset)
+    private void HoldGrabbedObject(GameObject obj, Vector3 offset)
     {
         if(grabbedObject != null)
         {
-            Object.transform.localPosition = Vector3.zero;
-            Object.transform.rotation = grabPoint.transform.rotation;
-            var obj = Object.GetComponent<Rigidbody>();
-            if(obj != null)
-            {
-                obj.constraints = RigidbodyConstraints.FreezeAll;
-            }
+            obj.transform.localPosition = Vector3.zero;
+            obj.transform.rotation = grabPoint.transform.rotation;
+
         }
     }
 
-    private void CallRelease(InputAction.CallbackContext ctx)
-    {
-        if (isHoldingObject)
-        {
 
-            ReleaseGrabbedObject();
-        }
-    }
 
     private void ReleaseGrabbedObject()
     {
         isHoldingObject = false;
         grabbedObject.transform.SetParent(null, true);
         grabbedObject.GetComponent<Rigidbody>().useGravity = true;
-        grabbedObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
         grabbedObject.GetComponent<BoxCollider>().enabled = true;
+        grabbedObject.GetComponent<Interactable>().ToggleVFXOff();
         grabbedObject = null;
 
     }

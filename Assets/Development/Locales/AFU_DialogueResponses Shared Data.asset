@@ -32,9 +32,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 192787101175808
-    m_Key: 'Ummm sure?
-
-'
+    m_Key: Ummm sure?
     m_Metadata:
       m_Items: []
   - m_Id: 193037270437888
@@ -50,7 +48,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 12739461245751296
-    m_Key: "I don't think so\u2026"
+    m_Key: "I don't think so\uFFFD"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 18446616745660416
+    m_Key: BREAK
     m_Metadata:
       m_Items: []
   m_Metadata:

@@ -10,7 +10,6 @@ public class PlayerSkinSelector : MonoBehaviour
     int skinIndex;
 
     [SerializeField] private CinemachineCamera cam;
-    [SerializeField] private CameraController controller;
     [SerializeField] private GameObject camLocation;
     [SerializeField] private SkinShopLocation shopLocation;
     [SerializeField] private GameObject playerSpawnPoint;
@@ -28,9 +27,38 @@ public class PlayerSkinSelector : MonoBehaviour
     }
     private void Start()
     {
-        shopLocation = FindFirstObjectByType<SkinShopLocation>();
-        playerSpawnPoint = shopLocation.playerSpawnPoint;
-        canvasController = FindFirstObjectByType<UI_CanvasController>();
+        canvasController = FindAnyObjectByType<UI_CanvasController>();
+        var cams = FindObjectsByType<CinemachineCamera>();
+        foreach(var camera in cams )
+        {
+            if (camera.CompareTag("Player"))
+            {
+                cam = camera;
+            }
+        }
+        shopLocation = FindAnyObjectByType<SkinShopLocation>();
+        if(shopLocation != null )
+        {
+            playerSpawnPoint = shopLocation.playerSpawnPoint;
+        }
+    }
+
+    private void OnLevelWasLoaded(int level)
+    {
+        shopLocation = FindAnyObjectByType<SkinShopLocation>();
+        if (shopLocation != null)
+        {
+            playerSpawnPoint = shopLocation.playerSpawnPoint;
+        }
+        canvasController = FindAnyObjectByType<UI_CanvasController>();
+        var cams = FindObjectsByType<CinemachineCamera>();
+        foreach (var camera in cams)
+        {
+            if (camera.CompareTag("Player"))
+            {
+                cam = camera;
+            }
+        }
     }
 
     public void StartSkinSelector()

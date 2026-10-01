@@ -16,12 +16,16 @@ public class Q_Collect : MonoBehaviour,IQuestMechanic
 
     public void GetQuestLog()
     {
-        questLog = FindFirstObjectByType<QuestLog>();
+        questLog = FindAnyObjectByType<QuestLog>();
     }
 
     public void OnDestroy()
     {
-        questLog.UpdateQuestObjective(objectiveID, 1);
+        if(questLog != null)
+        {
+            questLog.UpdateQuestObjective(objectiveID, 1);
+
+        }
 
 
     }

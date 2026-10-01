@@ -4,7 +4,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class AI_Dog : MonoBehaviour, I_EnemyBase
+public class AI_Dog : EnemyBaseComponent
 {
     [Header("Patrol")]
     public GameObject patrolPoints;
@@ -22,7 +22,6 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
     [SerializeField] private GameObject biteColliderParent;
     [Header("Waypoints")]
     [SerializeField] private List<Waypoint> waypoints;
-    [SerializeField] private List<WaypointConnection> connections = new();
     public Waypoint currentNode;
     [SerializeField] private Waypoint previousNode;
     [Header("Components")]
@@ -31,21 +30,27 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
     [SerializeField] protected bool isHit;
     [SerializeField] protected bool isStopped;
     [SerializeField] protected bool isRetreating;
+    ReactionState currentReactionState;
 
-    private int currentPointIndex = 0;
-    private enum EnemyState { Patrolling, Chasing, Bite, Stop, Hit, Retreat }
+
+    //private int currentPointIndex = 0;
+    public enum EnemyState { Patrolling, Chasing, Bite, Stop, Hit, Retreat }
     private EnemyState currentState = EnemyState.Patrolling;
 
     public bool IsDead = false;
 
     void Start()
     {
-        player = FindFirstObjectByType<PlayerGroundMovement>().gameObject;
+        player = FindAnyObjectByType<PlayerGroundMovement>().gameObject;
         playerStealth = player.GetComponent<PlayerStealthSystem>();
         animator = GetComponent<Animator>();
         FindWaypoints();
     }
 
+    public void SetCurrentState(EnemyState state)
+    {
+        currentState = state;
+    }
     void Update()
     {
         if (biteCooldown >= 0) biteCooldown -= Time.deltaTime;
@@ -138,6 +143,29 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
 
     }
 
+    public override void OnHit(PoopType type)
+    { 
+        currentReactionState = type.poopReaction;
+        switch (currentReactionState)
+        {
+            case ReactionState.Normal:
+                //animator.SetTrigger("isHit");
+                break;
+            case ReactionState.Fire:
+                //animator.SetTrigger("isHit");
+                break;
+            case ReactionState.Confetti:
+                //animator.SetTrigger("isHit");
+                break;
+            case ReactionState.Glow:
+                //animator.SetTrigger("isHit");
+                break;
+        }
+        isHit = true;
+        Debug.Log("HitHuman");
+        SetCurrentState(EnemyState.Hit);
+    }
+
     private void FindWaypoints()
     {
         var waypointsArray = patrolPoints.GetComponentsInChildren<Waypoint>();
@@ -150,7 +178,6 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
 
         }
         FindRandomWaypoint();
-        Debug.Log("CheckforWaypoints");
     }
 
 
@@ -158,7 +185,6 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
     {
         var randomIndex = Random.Range(0, waypoints.Count);
         this.currentNode = waypoints[randomIndex];
-        Debug.Log("H");
     }
 
 
@@ -169,7 +195,7 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
 
     protected async void HitReact()
     {
-        TakeDamage(1);
+
         animator.SetTrigger("isHit");
         await Task.Delay(3000);
     }
@@ -212,18 +238,6 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
         Destroy(comp);
     }
 
-
-    public void TakeDamage(int damage)
-    {
-
-
-    }
-
-    public void OnDeath(bool IsDead)
-    {
-
-    }
-
     protected virtual void SetMoveToLocation(Waypoint location)
     {
         currentNode = location;
@@ -250,36 +264,27 @@ public class AI_Dog : MonoBehaviour, I_EnemyBase
     {
         if (collision.gameObject.CompareTag("Poop"))
         {
-
-            TakeDamage(1);
+            var type = collision.gameObject.GetComponent<PoopProjectile>().GetPoopType();
+            TakeDamage(1, type);
         }
     }
 
     protected void ChooseNextDirection(Waypoint node)
     {
-        connections.Clear();
-
-        foreach (var connection in node.connections)
-            connections.Add(connection);
-
-        if (connections.Count == 0 && node.nextWaypoint != null)
-        {
-            connections.Add(new WaypointConnection { node = node.nextWaypoint });
-
-        }
-        else
+        if (node.nextWaypoint == null)
         {
             FindRandomWaypoint();
             return;
         }
-
-        int randomIndex = Random.Range(0, connections.Count);
-        Waypoint nextNode = connections[randomIndex].node;
-        if (nextNode == null)
-            return;
-        previousNode = currentNode;
-        SetMoveToLocation(nextNode);
-        MoveDogToLocation();
+        else
+        {
+            Waypoint nextNode = node.nextWaypoint;
+            if (nextNode == null)
+                return;
+            previousNode = currentNode;
+            SetMoveToLocation(nextNode);
+            MoveDogToLocation();
+        }
 
     }
 }

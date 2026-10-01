@@ -20,20 +20,13 @@ public class UI_SaveSlot : MonoBehaviour
 
 
 
-    private void CheckSaveLoad()
-    {
-        if (!isSaving)
-        {
-            CallLoad();
-        }else { CallSave(); }
-    }
-
     public void Init(SaveSlotInfo info, SaveSlotManager manager, UI_SaveWindow window, bool saving = true)
     {
         slotInfo = info;
         slotManager = manager;
         saveWindow = window;
         isSaving = saving;
+
 
         if (slotInfo.exists)
             UpdateSlotUI(slotInfo.playerName, slotInfo.lastSaved.ToString("g"));
@@ -49,20 +42,13 @@ public class UI_SaveSlot : MonoBehaviour
             playerNameText.text = slotInfo.exists ? slotInfo.playerName : "Empty Slot";
             lastSaveText.text = slotInfo.exists ? slotInfo.lastSaved.ToString() : "--/--/--";
         }
-        else
-        {
-            playerNameText.text = slotInfo.exists ? slotInfo.playerName : "Empty Slot";
-            lastSaveText.text = slotInfo.exists ? slotInfo.lastSaved.ToString() : "--/--/--";
-        }
-    }
-    private void GetSlot()
-    {
 
     }
-
     public void CallSave()
     {
-        SaveData data = FindFirstObjectByType<PlayerSaveLoadHandler>().saveData;
+        PlayerSaveLoadHandler handler = FindAnyObjectByType<PlayerSaveLoadHandler>();
+        SaveData data = handler.saveData;
+        handler.CallUpdateSave();
         SaveSlotManager.SaveToSlot(slotInfo.slotIndex, data, true);
         UpdateSlotUI(data.playerName,data.lastSaved.ToString());
         Debug.Log("SaveButtonPressed");
@@ -79,7 +65,7 @@ public class UI_SaveSlot : MonoBehaviour
             if (loadedData != null)
             {
                 Debug.Log("SlotFound");
-                var handler = FindFirstObjectByType<PlayerSaveLoadHandler>();
+                var handler = FindAnyObjectByType<PlayerSaveLoadHandler>();
                 handler.saveData = loadedData;
                 handler.ApplyLoadedData(); 
 

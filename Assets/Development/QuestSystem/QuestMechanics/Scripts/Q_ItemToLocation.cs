@@ -13,7 +13,7 @@ public class Q_ItemToLocation : MonoBehaviour, IQuestMechanic
     }
     public void GetQuestLog()
     {
-        questLog = FindFirstObjectByType<QuestLog>();
+        questLog = FindAnyObjectByType<QuestLog>();
     }
 
     void ItemAtLocation()
@@ -22,12 +22,15 @@ public class Q_ItemToLocation : MonoBehaviour, IQuestMechanic
         Destroy(gameObject);
     }
 
-    private void OnCollisionEnter(Collision collision)
+    private void OnTriggerEnter(Collider other)
     {
-        if (collision.gameObject.CompareTag("QuestItemToLocation"))
+        if (other.gameObject.CompareTag("QuestItemToLocation"))
         {
-            ItemAtLocation();
-            Destroy(collision.gameObject);
+            if(other.GetComponent<Q_Item>().objectiveID == objectiveID)
+            {
+                ItemAtLocation();
+                Destroy(other.gameObject);
+            }
         }
     }
 

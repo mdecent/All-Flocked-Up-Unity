@@ -1,6 +1,8 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
 
 [System.Serializable]
@@ -13,26 +15,55 @@ public class QuestRuntimeInstance
     public Dictionary<string, int> objectiveProgress = new(); //Dictionary stores the objectives from the current Stage Index
 
     public bool IsComplete => currentStageIndex >= questData.stages.Length;
+    private GameObject player;
     public QuestLog questLog;
+    private EXPSystem expComp;
+    private PlayerWingventory invComp;
+    public NPCBase dialogueComp; // currentQuestGiver
+    UI_CanvasController canvasController;
     public float currentTime;
 
     public bool isQuestFailed = false;
     public bool isRetrySelected = false;
+    private bool isPausedForDialogue;
+    private bool dialogueComplete;
 
-    public List<GameObject> questMechanicsObjects = new List<GameObject>();
+    public List<GameObject> questMechanicsObjects = new();
     [SerializeField] private PlayerNavArrow arrowPointer;
-    GameObject destination;
+    public GameObject destination;
+    private int cachedExp;
+    private int cachedTrinkets;
+    private List<string> itemRewards = new();
 
     public void Start()
     {
         
     }
 
-    //Gets objectives and for each sets an objectiveID
-    public void StartQuest()
+    public int GetCachedExp()
     {
-        questLog = GameObject.Find("Player").GetComponent<QuestLog>();
-        arrowPointer = GameObject.Find("Player").GetComponent<PlayerNavArrow>();
+        return cachedExp;
+    }
+
+    public int GetCachedTrinkets()
+    {
+        return cachedTrinkets;
+    }
+
+    public List<string> GetItemRewards()
+    {
+        return itemRewards;
+    }
+
+    //Gets objectives and for each sets an objectiveID
+    public async void StartQuest()
+    {
+        questLog = GameObject.FindAnyObjectByType<QuestLog>();
+        player = questLog.gameObject;
+        arrowPointer = player.GetComponent<PlayerNavArrow>();
+        expComp = player.GetComponent<EXPSystem>();
+        invComp = player.GetComponent<PlayerWingventory>();
+        canvasController = GameObject.FindAnyObjectByType<UI_CanvasController>();
 
         var objectives = GetCurrentObjectives();
         foreach (var obj in objectives)
@@ -42,31 +73,37 @@ public class QuestRuntimeInstance
 
         // finds quest mechanics
         GetQuestObjects();
-        GetQuestID(questData.questID);
-        GetObjectiveDestination(objectives[0].objectiveID);
-        arrowPointer.destination = destination;
+        SetQuestID(questData.questID);
+        destination = GetObjectiveDestination(objectives[0].objectiveID);
+         await Task.Delay(1000);
         arrowPointer.EnablePointerArrow(destination);
+        SetupStage();
 
 
     }
 
     //gets and sets QuestID to variable
-    public string GetQuestID(string questid) => questID;
+    public void SetQuestID(string id)
+    {
+        questID = id;
+    }
 
     //gets the quest mechanic gameobjects associated to that questID
     public void GetQuestObjects()
     {
 
         questMechanicsObjects.Clear();
-        IQuestMechanic[] mechanics = Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None)
-    .OfType<IQuestMechanic>()
-    .ToArray();
+        IQuestMechanic[] mechanics = Object
+            .FindObjectsByType<MonoBehaviour>()
+            .OfType<IQuestMechanic>()
+            .ToArray();
         foreach (var mechanic in mechanics)
         {
             if (mechanic is MonoBehaviour monoBehaviour && objectiveProgress.Keys.Contains<string>(mechanic.GetObjectiveID()))
             {
                 GameObject mechanicObject = monoBehaviour.gameObject;
                 questMechanicsObjects.Add(mechanicObject);
+              
             }
             else continue;
         }
@@ -81,38 +118,39 @@ public class QuestRuntimeInstance
         return questData.stages[currentStageIndex].objectivesToComplete;
     }
 
-    private void GetObjectiveDestination(string objectiveID)
+    private GameObject GetObjectiveDestination(string objectiveID)
     {
-        var objective = objectiveProgress[objectiveID];
-        if (objective.Equals(currentStageIndex))
+        foreach (var mechanic in questMechanicsObjects)
         {
-            foreach (var mechanic in questMechanicsObjects)
+            var comp = mechanic.GetComponent<IQuestMechanic>();
+
+            if (comp != null && comp.GetObjectiveID() == objectiveID)
             {
-                var comp = mechanic.GetComponent<IQuestMechanic>();
-                if (objectiveProgress.Keys.Contains<string>(comp.GetObjectiveID()))
-                {
-                    destination = mechanic;
-                } 
+                destination = mechanic;
+                Debug.Log($"Destination set: {mechanic.name}");
+                return destination;
             }
         }
+
+        return null;
     }
 
     //Takes ObjectiveID and amount and increments. Checks if stage is complete and advances if true.
     public void UpdateObjective(string objectiveID, int amount)
     {
+        if (!objectiveProgress.ContainsKey(objectiveID)) { return; }
+        var objectives = GetCurrentObjectives();
+        foreach (var obj in objectives)
+        {
+            if (objectiveProgress[objectiveID] + amount > obj.quantityToComplete) { return; }
+            cachedExp += obj.bonusEXP;
+        }
         GetObjectiveDestination(objectiveID); 
-        arrowPointer.destination = destination; 
-        arrowPointer.EnablePointerArrow(destination);
-        if (!objectiveProgress.ContainsKey(objectiveID)) {  return; }
 
         objectiveProgress[objectiveID] += amount;
         questLog.OnObjectiveUpdated(this, objectiveID, objectiveProgress[objectiveID]);
-
-
-        Debug.Log("Objective Increments?");
-        if (CheckStageComplete())
-            AdvanceStage();
-        Debug.Log("Stage Completed");
+        arrowPointer.SetDestination(destination);
+        if (CheckStageComplete()) AdvanceStage();
     }
 
     //checks if stages are completed and completed quest if true
@@ -125,31 +163,64 @@ public class QuestRuntimeInstance
             if (!objectiveProgress.ContainsKey(obj.objectiveID)) return false;
             if (objectiveProgress[obj.objectiveID] < obj.quantityToComplete)
                 return false;
-            //not sure if this triggers properly
-            GameObject.FindFirstObjectByType<EXPSystem>().IncrementXP(objectiveProgress[obj.objectiveID]);
+        }
+        return true;
+
+
+    }
+
+    void SetupStage()
+    {
+        objectiveProgress.Clear();
+        var objectives = GetCurrentObjectives();
+        foreach (var obj in objectives)
+        {
+            objectiveProgress[obj.objectiveID] = 0;
         }
 
-        return true;
+        GetQuestObjects();
+        dialogueComp.dialogueFirst = true;
+        destination = GetObjectiveDestination(objectives[0].objectiveID);
+        arrowPointer.SetDestination(destination);
     }
 
     //Advances Stage index. If not complete, Start quest.
     public void AdvanceStage()
     {
-        GameObject.FindFirstObjectByType<EXPSystem>().IncrementXP(questData.stages[currentStageIndex].expReward);
+        
+        cachedExp += questData.stages[currentStageIndex].expReward;
+        cachedTrinkets += questData.stages[currentStageIndex].trinketReward;
+        itemRewards.AddRange(questData.itemRewards);
         currentStageIndex++;
         GetQuestObjects();
         if (!IsComplete)
         {
-            StartQuest();
+            if (currentStageIndex >= 0 && currentStageIndex < questData.stages.Length && questData.stages[currentStageIndex].hasDialogueAfter)
+            {
+                CallDialogue();
+               
+            }
+            if (currentStageIndex >= 0 && currentStageIndex < questData.stages.Length && questData.stages[currentStageIndex-1].hasWarpAfter)
+            {
+                dialogueComp.SetReadyToWarp(true);
+
+            }
+                SetupStage();
         }
         if (currentStageIndex >= questData.stages.Length)
         {
+
             CompleteQuest();
         }
     }
     //calls the quest log function to remove quest
     public void CompleteQuest()
     {
+        if(currentStageIndex >= questData.stages.Length) { dialogueComp.SetIsWaiting(false); }
+        arrowPointer.DestroyArrow();
+        expComp.IncrementXP(cachedExp);
+        invComp.AddTrinketToInv(cachedTrinkets, 0);
+        GiveItemReward();
         questLog.CheckForCompletedQuests();
     }
 
@@ -171,6 +242,12 @@ public class QuestRuntimeInstance
         Debug.Log("Call Quest Failed");
     }
 
+    private void CallDialogue()
+    {
+        canvasController.OpenDialogue();
+        dialogueComp.InteractWithNPCDialogue();
+
+    }
     public void GiveItemReward()
     {
         questLog.AddItemsToInventory(questData.itemRewards);

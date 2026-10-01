@@ -11,11 +11,15 @@ public class TrafficManager : MonoBehaviour
     [SerializeField] private List<TrafficLightChanger> groupALights;
     [SerializeField] private List<TrafficLightChanger> groupBLights;
     [SerializeField] private List<Waypoint> waypoints;
+    [SerializeField] private List<Waypoint> respawnWaypoints;
+    [SerializeField]float respawnDelay = 3f;
+    int vehicleCache;
     private int lastIndex;
     [SerializeField] private int numberOfCars;
     [SerializeField] private List<VehicleBase> vehicleTypes = new();
     [SerializeField] private List<VehicleBase> vehicles;
     public float timer;
+    [SerializeField] private LayerMask trafficLayer;
 
 
     async void Start()
@@ -44,10 +48,20 @@ public class TrafficManager : MonoBehaviour
     void Update()
     {
         timer -= Time.deltaTime;
+        respawnDelay -= Time.deltaTime;
 
         if (timer <= 0)
         {
             SwitchLightGroups();
+        }
+        if(respawnDelay <= 0)
+        {
+            if(vehicles.Count < numberOfCars)
+            {
+                CallSpawnNew();
+            }
+                respawnDelay = 3f;
+            
         }
     }
 
@@ -56,7 +70,7 @@ public class TrafficManager : MonoBehaviour
     private void InitLights()
     {
         trafficLights.Clear();
-        trafficLights.AddRange(FindObjectsByType<TrafficLightChanger>(FindObjectsSortMode.None));
+        trafficLights.AddRange(FindObjectsByType<TrafficLightChanger>());
     }
 
     private void SetLights()
@@ -65,16 +79,20 @@ public class TrafficManager : MonoBehaviour
     }
     private void FindWaypoints()
     {
-        var waypointsArray = FindObjectsByType<Waypoint>(FindObjectsSortMode.None);
+        var waypointsArray = FindObjectsByType<Waypoint>();
         foreach (var waypoint in waypointsArray)
         {
             if (waypoint.CompareTag("Traffic"))
             {
                 waypoints.Add(waypoint);
+                if (waypoint.gameObject.layer == LayerMask.NameToLayer("TrafficWaypoints"))
+                {
+                    respawnWaypoints.Add(waypoint);
+                }
+                else continue;
             }
 
         }
-        Debug.Log("CheckforWaypoints");
     }
 
     private void GroupTrafficLights()
@@ -132,13 +150,13 @@ public class TrafficManager : MonoBehaviour
         if (groupAState == ETrafficLightState.Yellow)
         {
             ChangeGroupALightState(new RedState(groupALights[0]), ETrafficLightState.Red);
-            ChangeGroupBLightState(new GreenState(groupBLights[0]), ETrafficLightState.Green);
-            timer = 3f;
+            ChangeGroupBLightState(new YellowState(groupBLights[0]), ETrafficLightState.Yellow);
+            timer = 10f;
         }
         else if (groupAState == ETrafficLightState.Red)
         {
             ChangeGroupALightState(new GreenState(groupALights[0]), ETrafficLightState.Green);
-            ChangeGroupBLightState(new RedState(groupBLights[0]), ETrafficLightState.Yellow);
+            ChangeGroupBLightState(new RedState(groupBLights[0]), ETrafficLightState.Red);
             timer = 10f;
         }
     }
@@ -146,20 +164,21 @@ public class TrafficManager : MonoBehaviour
     private  void SpawnCarsAtWaypoints()
     {
         if (waypoints.Count == 0) return;
+        List<Waypoint> used = new();
+        List<Waypoint> tempList = new(waypoints);
         for(int i = 0; i < numberOfCars; i++)
         {
-            var randomIndex = Random.Range(0, waypoints.Count);
-            //if (randomIndex != lastIndex)
-            //{
-            Waypoint waypoint = waypoints[randomIndex];
-            var car = Instantiate(vehicleTypes[Random.Range(0, vehicleTypes.Count)],waypoint.transform.position,waypoint.transform.rotation);
+            var randomIndex = Random.Range(0, tempList.Count);
+            Waypoint spawn = tempList[randomIndex];
+            Waypoint next = spawn.nextWaypoint;
+            var car = Instantiate(vehicleTypes[Random.Range(0, vehicleTypes.Count)], spawn.transform.position, spawn.transform.rotation);
             vehicles.Add(car);
-            car.transform.position = waypoint.transform.position;
-            car.currentNode = waypoint;
+            car.currentNode = next;
+            used.Add(spawn);
+            tempList.Remove(spawn);
             car.manager = this;
-
-
-           //}
+            car.MoveVehicleToLocation();
+            if (tempList.Count <= 0) { Debug.Log("tempList empty... no more waypoints?"); }
         }
 
         //await Task.Yield();
@@ -168,22 +187,43 @@ public class TrafficManager : MonoBehaviour
     public void RemoveVehicleFromList(VehicleBase vehicle)
     {
         vehicles.Remove(vehicle);
-        SpawnNewCar();
+        vehicleCache++;
+       // CallSpawnNew();
+    }
+
+    private  void CallSpawnNew()
+    {
+        //Debug.Log("CallSpawnNew");
+                SpawnNewCar();
+                vehicleCache--;
+            
+        
     }
 
     private void SpawnNewCar()
     {
-        var randomIndex = Random.Range(0, waypoints.Count - 1);
-        if (randomIndex != lastIndex)
-        {
-            Transform waypoint = waypoints[randomIndex].transform;
-            var car = Instantiate(vehicleTypes[Random.Range(0, vehicleTypes.Count)], waypoint.position, waypoint.rotation);
-            vehicles.Add(car);
-            car.transform.position = waypoint.position;
-            car.currentNode = waypoints[randomIndex];
-            car.manager = this;
+        int attempts = 10;
 
+        while (attempts-- > 0)
+        {
+            int randomIndex = Random.Range(0, respawnWaypoints.Count);
+            Waypoint spawn = respawnWaypoints[randomIndex];
+
+            if (spawn == null || spawn.nextWaypoint == null)
+                continue;
+
+            if (Physics.CheckSphere(spawn.transform.position, 2f, trafficLayer))
+                continue;
+            var car = Instantiate(vehicleTypes[Random.Range(0, vehicleTypes.Count)], spawn.transform.position, spawn.transform.rotation);
+            vehicles.Add(car);
+
+            //car.transform.position = waypoint.transform.position;
+            car.currentNode = spawn.nextWaypoint;
+            car.manager = this;
+            car.MoveVehicleToLocation();
+            return;
         }
 
     }
+    
 }

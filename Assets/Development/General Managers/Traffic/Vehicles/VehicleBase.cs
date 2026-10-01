@@ -4,19 +4,20 @@ using UnityEngine;
 using UnityEngine.AI;
 using System.Collections.Generic;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.ProBuilder.MeshOperations;
 
 public class VehicleBase :MonoBehaviour
 {
     public Waypoint currentNode;
     [SerializeField] private Waypoint previousNode;
     [SerializeField] protected NavMeshAgent navAgent;
-    [SerializeField] private float vehicleSpeed => navAgent.speed;
+    private float vehicleSpeed => navAgent.speed;
     [SerializeField] protected float detectRadius=2f;
     [SerializeField] protected LayerMask playerLayer;
     [SerializeField] protected LayerMask enemyLayer;
     [SerializeField] protected LayerMask trafficLayer;
     public bool isStopped;
-    private float stopTimer = 5f;
+    private float stopTimer = 2.5f;
     [SerializeField] private bool isMoving;
     [SerializeField] private List<WaypointConnection> connections = new();
     [SerializeField] protected float detectObjectRange=2f;
@@ -35,31 +36,38 @@ public class VehicleBase :MonoBehaviour
     // Update is called once per frame
     protected virtual void Update()
     {
-        var distance = Vector3.Distance(transform.position, currentNode.transform.position);
-        if (distance > 200f)
-        {
-            Debug.Log("Too far from currentNode");
-            Destroy(this.gameObject);
-           
-        }
-        if (isStopped)
-        {
-            StopVehicle();
-        }else if (!isStopped)
-        {
-            MoveVehicleToLocation();
-        }
-
         if (currentNode == null)
         {
             StopVehicle();
-            Debug.Log("Cant find CurrentNode");
+            Destroy(this.gameObject);
+            //Debug.Log("Cant find CurrentNode");
             return;
         }
+        //if (!navAgent.hasPath && !navAgent.pathPending)
+        //{
+        //    manager.RemoveVehicleFromList(this);
+        //   // Destroy(this.gameObject);
 
-        if (navAgent.remainingDistance < 5f)
+        //}
+
+        if (!navAgent.pathPending && navAgent.hasPath && navAgent.remainingDistance <= navAgent.stoppingDistance + 0.1f)
         {
+            navAgent.ResetPath();
             ChooseNextDirection(currentNode);
+        }
+        if(isStopped )
+        {
+            if (stopTimer > 0)
+            {
+                stopTimer -= Time.deltaTime;
+                StopVehicle();
+            }
+            else StartMove();
+
+        }
+        else
+        {
+            StartMove();
         }
 
     }
@@ -93,37 +101,30 @@ public class VehicleBase :MonoBehaviour
 
         navAgent.isStopped = false;
         navAgent.SetDestination(currentNode.transform.position);
-
+        isMoving = true;
     }
 
     public virtual void StopVehicle()
     {
-        stopTimer -= Time.deltaTime;
-        if(stopTimer <= 0)
-        {
-            Debug.Log("Car Stopped too long!");
-            navAgent.isStopped = false;
-            isStopped = false;
-            isMoving = true;
-        }
-        else
-        {
-            navAgent.isStopped = true;
-        }
-        //Debug.Log("Stopping");
+        navAgent.isStopped = true;
+        isMoving = false;
+
+    }
+
+    public virtual void StartMove()
+    {
+        stopTimer = 2.5f;
+        //navAgent.isStopped = false;
+        isMoving = true;
     }
 
     public virtual void TriggerCollisions()
     {
-        Debug.Log("HitAnotherVehicle");
-        //StopVehicle();
         HonkHorn();
         navAgent.speed = 2;
-        if (navAgent.isStopped)
+        if (!isStopped)
         {
-            isStopped = false;
-            isMoving = true;
-            MoveVehicleToLocation();
+            isStopped = true;
         }
     }
 
@@ -133,48 +134,32 @@ public class VehicleBase :MonoBehaviour
     {
         if (node == null)
             return;
-        connections.Clear();
-        connections.AddRange(node.connections);
-
-        if (connections.Count == 0 && node.nextWaypoint != null)
+        Waypoint next;
+        next = node.nextWaypoint;
+        if (next == null)
         {
-            connections.Add(new WaypointConnection { node = node.nextWaypoint });
-
-        }
-        if (connections.Count == 0 && node.nextWaypoint == null)
-        {
-            if (node.branches.Count > 0)
+            var num = Random.Range(0, 2);
+            if (node.branches.Count > 0 && num == 0)
             {
-                node.nextWaypoint = node.branches[0];
+                next = node.branches[0];
+                previousNode = currentNode;
+                SetMoveToLocation(next);
+                MoveVehicleToLocation();
             }
-            
+            else
+            {
+                manager.RemoveVehicleFromList(this);
+                Destroy(this.gameObject);
+                
+            }
         }
-        //if (node.branches.Count>0)
-        //{
-        //    var chance = Random.Range(0, 1);
-        //    if (chance != 0)
-        //    {
-        //        node.nextWaypoint = node.branches[Random.Range(0, node.branches.Count-1)];
-        //    }
-            
-        //}
-        if(connections.Count ==0 && node.branches.Count == 0 && node.nextWaypoint == null)
+        else
         {
-            Destroy(this.gameObject);
-            manager.RemoveVehicleFromList(this);
+            previousNode = currentNode;
+            SetMoveToLocation(next);
+            MoveVehicleToLocation();
         }
 
-        //if (connections.Count == 0)
-        //    return;
-
-        int randomIndex = Random.Range(0, connections.Count);
-        Waypoint nextNode = connections[randomIndex].node;
-        if (nextNode == null)
-            return;
-        previousNode = currentNode;
-        SetMoveToLocation(nextNode);
-        MoveVehicleToLocation();
-        
     }
 
     protected virtual void HonkHorn()

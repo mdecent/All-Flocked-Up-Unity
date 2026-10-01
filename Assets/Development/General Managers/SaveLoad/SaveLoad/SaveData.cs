@@ -17,13 +17,16 @@ public class SaveData
     public DateTime lastSaved;
     public int poop;
     public float stamina;
-    public Dictionary<GameObject, int> inventory = new();
+    public Dictionary<string, int> inventory = new();
     public List<QuestRuntimeInstance> activeQuests = new();
     public List<QuestDetails> completedQuests = new();
+    public List<Transform> questObjects = new();
     public List<RaceData> completedRaces = new();
     public float timeOfDay;
     public Material playerSkin;
     public PlayerPrefs playerPrefs;
+    public List<bool> tutData = new();
+    public List<NPCBase> npcData = new();
     
 
     public SaveData()

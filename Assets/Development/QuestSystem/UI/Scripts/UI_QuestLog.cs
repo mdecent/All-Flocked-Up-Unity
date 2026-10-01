@@ -5,6 +5,8 @@ using Unity.VisualScripting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine.Localization;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 public class UI_QuestLog : MonoBehaviour
 {
@@ -13,7 +15,6 @@ public class UI_QuestLog : MonoBehaviour
     [SerializeField] private QuestLog questLog;
     [SerializeField]private List<QuestRuntimeInstance> instanceList = new();
     [SerializeField] private UI_QuestEntry entryPrefab;
-    [SerializeField] private UI_SideQuestEntry sideEntryPrefab;
     [SerializeField] private UI_QuestLogEntryObjectives objectiveEntryPrefab;
 
 
@@ -21,10 +22,6 @@ public class UI_QuestLog : MonoBehaviour
     [SerializeField] private ScrollRect mainQuestBox;
     [SerializeField] private List<UI_QuestEntry> mainQuestButtons = new();
 
-
-    [Header("SideQuestBox")]
-    [SerializeField] private ScrollRect sideQuestBox;
-    [SerializeField] private List<UI_SideQuestEntry> sideQuestButtons = new();
 
     [Header("QuestInfoPanel")]
     [SerializeField] private TextMeshProUGUI questNameText;
@@ -41,14 +38,19 @@ public class UI_QuestLog : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        questLog = FindFirstObjectByType<QuestLog>();
+        questLog = FindAnyObjectByType<QuestLog>();
         foreach(var quest in questLog.activeQuests)
         {
             instanceList.Add(quest);
         }
         GetCurrentQuests();
         trackQuestButton.onClick.AddListener(()=>TrackQuest(currentQuest));
-        HideRewardImages(currentQuest);
+        //HideRewardImages(currentQuest);
+        if (Gamepad.current.IsActuated())
+        {
+            EventSystem.current.SetSelectedGameObject(trackQuestButton.gameObject);
+        }
+        else return;
     }
 
     public void TrackQuest(QuestRuntimeInstance questID)
@@ -127,7 +129,7 @@ public class UI_QuestLog : MonoBehaviour
         foreach (QuestRuntimeInstance item in instanceList)
         {
             var tempQuestData = item.questData;
-            if(tempQuestData != null&& tempQuestData.isMainQuest)
+            if(tempQuestData != null)
             {
                 var button = Instantiate(entryPrefab);
                 mainQuestButtons.Add(button);
@@ -135,17 +137,7 @@ public class UI_QuestLog : MonoBehaviour
                 button.questID = tempQuestData.questID;
                 button.log = this;
                 AddToQuestBox(button);
-            }else if(tempQuestData != null && !tempQuestData.isMainQuest)
-            {
-                var button = Instantiate(sideEntryPrefab);
-                sideQuestButtons.Add(button);
-                button.questName = tempQuestData.questName;
-                button.questID = tempQuestData.questID;
-                button.log = this;
-                AddToSideQuestBox(button);
             }
-
-
         }
     }
 
@@ -153,14 +145,9 @@ public class UI_QuestLog : MonoBehaviour
     {
 
             button.transform.SetParent(mainQuestBox.transform, false);
-
-        Debug.Log("Added To Box");
     }
 
-    private void AddToSideQuestBox(UI_SideQuestEntry button)
-    {
-        button.transform.SetParent(sideQuestBox.transform, false);
-    }
+
 
     public void CloseQuestLog()
     {

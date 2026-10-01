@@ -14,10 +14,10 @@ public class UI_LanguageSelector : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        canvasController = FindAnyObjectByType<UI_CanvasController>();
         Init();
         confirmButton.onClick.AddListener(DestroyCanvas);
-        canvasController = FindFirstObjectByType<UI_CanvasController>();
-        EventSystem.current.SetSelectedGameObject(confirmButton.gameObject);
+        //EventSystem.current.SetSelectedGameObject(confirmButton.gameObject);
     }
 
 
@@ -26,7 +26,7 @@ public class UI_LanguageSelector : MonoBehaviour
         await settings.GetInitializationOperation().Task;
         var locales = settings.GetAvailableLocales().Locales;
         List<string> options = new();
-        int index = 6;
+        int index = 3;
         selector.ClearOptions();
         for (int i = 0; i<locales.Count; i++)
         {
@@ -37,7 +37,10 @@ public class UI_LanguageSelector : MonoBehaviour
         selector.value = index;
         selector.RefreshShownValue();
         selector.onValueChanged.AddListener(ChangeLanguage);
-        EventSystem.current.SetSelectedGameObject(selector.gameObject);
+        if (!confirmButton.gameObject)
+        {
+            EventSystem.current.SetSelectedGameObject(confirmButton.gameObject);
+        }
     }
 
     void ChangeLanguage(int id)

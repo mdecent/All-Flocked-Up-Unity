@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: CootorialRace
   m_EditorClassIdentifier: 
   raceID: Race000
-  raceTime: 60
+  raceTime: 999
   raceActive: 0
   raceName:
     m_TableReference:
@@ -35,7 +35,14 @@ MonoBehaviour:
     m_LocalVariables: []
   raceRewards: 0
   checkpointLocations: []
-  checkpointSpawns: []
+  checkpointSpawns:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   numberOfCPURacers: 0
   startLine: {fileID: 0}
   references:

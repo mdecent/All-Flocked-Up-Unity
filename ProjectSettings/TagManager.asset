@@ -26,6 +26,9 @@ TagManager:
   - Trash
   - Ground
   - StartLocation
+  - North
+  - MapIcons
+  - Ride
   layers:
   - Default
   - TransparentFX
@@ -56,8 +59,8 @@ TagManager:
   - Wearable
   - Perchable
   - Interior
-  - 
-  - 
+  - Ride
+  - HideSeek
   - 
   m_SortingLayers:
   - name: Default
@@ -72,3 +75,4 @@ TagManager:
   - Light Layer 5
   - Light Layer 6
   - Light Layer 7
+  m_MigratedRenderPipelines: []

@@ -1,43 +1,43 @@
 using NUnit.Framework.Constraints;
+using Steamworks;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.AI;
+public enum ReactionState { Normal,Fire,Bomb,Confetti,Glow}
 
 public class EnemyBaseComponent : MonoBehaviour, I_EnemyBase
 {
     [SerializeField] private Q_KillComponent questKillComponent;
-    public bool isDeadLocal;
-    public int currentHealth;
+    public GameObject enemyRef;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    
+
     void Awake()
     {
         questKillComponent = GetComponent<Q_KillComponent>();
+        enemyRef = this.gameObject;
     }
 
-
-    void Update()
+    private void VisionConeSearch()
     {
 
     }
 
 
-    public void TakeDamage(int damage)
+    public void TakeDamage(int damage, PoopType type)
     {
-        currentHealth -= damage;
-        if (currentHealth <= 0)
-        {
-            isDeadLocal = true;
-            OnDeath(isDeadLocal);
-            Debug.Log("Enemy Is Dead");
-
-        }
+        TriggerStateChangeOnHit(type);
     }
 
-    public void OnDeath(bool IsDead)
+    public void TriggerStateChangeOnHit(PoopType type)
     {
-        Debug.Log("OnDeath Triggered");
-        questKillComponent.KillComplete();
+        OnHit(type);
     }
+
+    public virtual void OnHit(PoopType type)
+    {
+        Debug.Log("CallBaseOnHit");
+    }
+
 
 
 }

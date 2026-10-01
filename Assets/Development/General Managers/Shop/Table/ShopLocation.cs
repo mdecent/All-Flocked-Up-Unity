@@ -17,8 +17,8 @@ public class ShopLocation : ShopManager
     {
         base.Start();
         SpawnItemsInSlots();
-        canvasController = FindFirstObjectByType<UI_CanvasController>();
-        inventoryRef = FindFirstObjectByType<PlayerWingventory>();
+        canvasController = FindAnyObjectByType<UI_CanvasController>();
+        inventoryRef = FindAnyObjectByType<PlayerWingventory>();
     }
 
     // Update is called once per frame
@@ -36,7 +36,6 @@ public class ShopLocation : ShopManager
             currentItemList.TryAdd(item.Key,item.Value);
             items.Add(spawnedItem);
             spawnedItem.transform.position = slot.transform.position;
-            Debug.Log("ItemSpawned:" + item.Key);
         }
     }
 
@@ -82,7 +81,7 @@ public class ShopLocation : ShopManager
 
     public void BuyAndRemoveItem(ShopItem item)
     {
-        inventoryRef.inventory.Add(item.gameObject,1);
+        inventoryRef.inventory.Add(item.name,1);
     }
 
 

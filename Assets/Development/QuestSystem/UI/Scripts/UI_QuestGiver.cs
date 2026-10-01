@@ -2,6 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Localization;
+using UnityEngine.EventSystems;
 
 public class UI_QuestGiver : MonoBehaviour
 {
@@ -20,10 +21,11 @@ public class UI_QuestGiver : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        questLog = FindFirstObjectByType<QuestLog>();
+        questLog = FindAnyObjectByType<QuestLog>();
         acceptQuestButton.onClick.AddListener(AddQuestToLog);
         cancelButton.onClick.AddListener(CloseQuestGiverUI);
         Debug.Log(currentquestGiver.quests[0].ToString());
+        EventSystem.current.SetSelectedGameObject(acceptQuestButton.gameObject);
         
     }
 
@@ -50,6 +52,11 @@ public class UI_QuestGiver : MonoBehaviour
     private void AddQuestToLog()
     {
         currentquestGiver.AcceptQuest(questLog, currentquestGiver.quests[0],currentquestGiver);
+        if (currentquestGiver.quests.Count <= 0) 
+        {
+            var comp = currentquestGiver.GetComponent<QuestGiver>();
+            Destroy(comp);
+        }
         CloseQuestGiverUI();
     }
 
